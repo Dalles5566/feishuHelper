@@ -43,3 +43,8 @@
   - Created `src/config/database.ts` with connection pool management (getPool, closePool, runMigrations)
   - Created `src/utils/db.ts` with query utility functions (query, queryOne, insert, update, remove, withTransaction)
   - All 18 unit tests passing
+- Completed Task 1.3: Environment variables and application configuration
+  - Created `src/config/index.ts` with all config groups (feishu, llm, database, redis, app) and startup validation for required variables
+  - Created `.env.example` template covering all supported environment variables
+  - All 40 unit tests passing
+  - Set up local dev environment: PostgreSQL (port 5432) and Redis (port 6379) running via Docker

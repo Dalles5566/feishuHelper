@@ -43,3 +43,8 @@
   - 创建 `src/config/database.ts`，实现连接池管理（getPool、closePool、runMigrations）
   - 创建 `src/utils/db.ts`，封装数据库操作工具函数（query、queryOne、insert、update、remove、withTransaction）
   - 18 个单元测试全部通过
+- 完成 Task 1.3：环境变量与应用配置
+  - 创建 `src/config/index.ts`，定义所有配置项（飞书、LLM、数据库、Redis、应用），启动时验证必填项
+  - 创建 `.env.example` 模板文件，覆盖所有支持的环境变量
+  - 40 个单元测试全部通过
+  - 配置本地开发环境：使用 Docker 运行 PostgreSQL（端口 5432）和 Redis（端口 6379）
