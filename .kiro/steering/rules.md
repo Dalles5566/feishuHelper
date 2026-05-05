@@ -15,6 +15,7 @@
   - Example: `05/06/2026-add webhook gateway implementation`
 - **Branch strategy**: Push to new branches, never directly to main
 - **Default branch**: main
+- **Before every commit**: Update both `docs/worklogCN.md` and `docs/worklogEN.md` with what this commit does, then commit everything together
 
 ## Documentation
 
