@@ -15,7 +15,7 @@
     - 创建 `src/` 目录结构：`src/gateway/`, `src/agent/`, `src/workflow/`, `src/services/`, `src/models/`, `src/utils/`, `src/config/`
     - _Requirements: 10.1_
 
-  - [ ] 1.2 配置数据库与 Schema 迁移
+  - [x] 1.2 配置数据库与 Schema 迁移
     - 创建数据库迁移脚本，包含所有表：`meetings`, `tasks`, `workflow_logs`, `task_assignments`, `verification_reports`, `qa_feedbacks`, `documents`
     - 实现数据库连接池配置（`src/config/database.ts`）
     - 创建基础的数据库查询工具函数

@@ -38,3 +38,8 @@
   - 配置 vitest 测试框架
   - 创建 src/ 目录结构：gateway、agent、workflow、services、models、utils、config
 - 生成了 tasks.md 实现计划，包含 15 个顶层任务覆盖完整开发周期
+- 完成 Task 1.2：数据库配置与 Schema 迁移
+  - 创建 `migrations/001_initial_schema.sql`，包含 7 张表（meetings、tasks、workflow_logs、task_assignments、verification_reports、qa_feedbacks、documents）和索引
+  - 创建 `src/config/database.ts`，实现连接池管理（getPool、closePool、runMigrations）
+  - 创建 `src/utils/db.ts`，封装数据库操作工具函数（query、queryOne、insert、update、remove、withTransaction）
+  - 18 个单元测试全部通过
