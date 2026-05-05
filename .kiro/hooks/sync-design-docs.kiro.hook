@@ -1,0 +1,16 @@
+{
+  "enabled": true,
+  "name": "Sync Design Docs",
+  "description": "When the spec design.md is edited, automatically update docs/designCN.md and docs/designEN.md to keep bilingual versions in sync.",
+  "version": "1",
+  "when": {
+    "type": "fileEdited",
+    "patterns": [
+      ".kiro/specs/feishu-helper/design.md"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "The spec design document (.kiro/specs/feishu-helper/design.md) was just updated. Please sync the changes to both docs/designCN.md (Chinese version) and docs/designEN.md (English version) to keep them consistent with the latest design."
+  }
+}

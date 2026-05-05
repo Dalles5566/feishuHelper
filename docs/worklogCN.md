@@ -1,0 +1,33 @@
+# 每日工作日志
+
+> **说明：** 本项目全程由 AI 辅助完成（Kiro）。所有代码、文档和架构决策均由 AI 生成，人工负责指导和审批。
+
+---
+
+## 2026-05-05（周二）
+
+### 今日完成内容
+
+- 初始化 feishuHelper 项目工作区
+- 按照需求优先的工作流创建了项目 spec：
+  - 编写了 `requirements.md`，覆盖 10 个核心需求（会议分析、任务管理、任务分配、代码验证、测试文档生成、QA 反馈路由、MD 文档更新、使用手册编译、工作流状态管理、飞书 API 集成）
+  - 根据用户反馈，在工作流状态管理需求中补充了"会议更新触发任务回退"的循环机制
+- 创建了 `design.md` 完整技术设计文档：
+  - 架构：AI Agent + 飞书 MCP 后端服务 + 飞书机器人交互入口
+  - 技术栈：Node.js/TypeScript、LangChain.js、@larksuiteoapi/lark-mcp、PostgreSQL、Redis（BullMQ）、Fastify
+  - 定义了 8 个核心组件及 TypeScript 接口
+  - 设计了包含所有回退路径的工作流状态机
+  - 定义了 16 个正确性属性用于属性基测试
+  - 记录了错误处理、重试策略和测试策略
+- 配置 GitHub 仓库：
+  - 初始化 git，创建 `.gitignore`
+  - 安装 GitHub CLI（`gh`）并完成认证
+  - 创建公开仓库：https://github.com/Dalles5566/feishuHelper
+  - 将初始提交推送到 `main` 分支
+- 创建中英文双语版本的设计文档和工作日志
+- 配置了 `.kiro/steering/rules.md` 开发规范（代码语言、注释语言、commit 格式等）
+- 创建了 `docs/skills.md` 用于记录学习到的技能
+- 学习了 Kiro Hook 的概念：
+  - Hook 是一个"自动触发器"——当某个事件发生时，自动执行某个动作
+  - 例如：文件被编辑时 → 自动提醒同步双语文档
+  - 创建了 `sync-design-docs` hook，当 design.md 更新时自动同步 designCN/EN
