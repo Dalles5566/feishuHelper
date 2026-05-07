@@ -43,6 +43,11 @@
   - Created `src/config/database.ts` with connection pool management (getPool, closePool, runMigrations)
   - Created `src/utils/db.ts` with query utility functions (query, queryOne, insert, update, remove, withTransaction)
   - All 18 unit tests passing
+- Completed Task 2: Core type definitions and error handling framework
+  - Created `src/models/task.ts`, `meeting.ts`, `workflow.ts`, `verification.ts`, `document.ts`, `index.ts` with all core TypeScript types
+  - Created `src/utils/errors.ts`: AppError class, 5 error categories, static factory methods, well-known error code constants
+  - Created `src/utils/retry.ts`: exponential backoff retry strategy, withRetry() function with injectable sleep for testing
+  - All 98 unit tests passing
 - Completed Task 1.3: Environment variables and application configuration
   - Created `src/config/index.ts` with all config groups (feishu, llm, database, redis, app) and startup validation for required variables
   - Created `.env.example` template covering all supported environment variables

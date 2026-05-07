@@ -43,6 +43,11 @@
   - 创建 `src/config/database.ts`，实现连接池管理（getPool、closePool、runMigrations）
   - 创建 `src/utils/db.ts`，封装数据库操作工具函数（query、queryOne、insert、update、remove、withTransaction）
   - 18 个单元测试全部通过
+- 完成 Task 2：核心类型定义与错误处理框架
+  - 创建 `src/models/task.ts`、`meeting.ts`、`workflow.ts`、`verification.ts`、`document.ts`、`index.ts`，定义所有核心 TypeScript 类型
+  - 创建 `src/utils/errors.ts`：AppError 类，5 种错误分类，静态工厂方法，常用错误码常量
+  - 创建 `src/utils/retry.ts`：指数退避重试策略，withRetry() 函数，可注入 sleep（方便测试）
+  - 98 个单元测试全部通过
 - 完成 Task 1.3：环境变量与应用配置
   - 创建 `src/config/index.ts`，定义所有配置项（飞书、LLM、数据库、Redis、应用），启动时验证必填项
   - 创建 `.env.example` 模板文件，覆盖所有支持的环境变量
