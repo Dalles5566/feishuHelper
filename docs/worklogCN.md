@@ -64,3 +64,9 @@
   - 创建 `src/workflow/stateMachine.ts`：16 条合法状态转换规则、validateTransition()、transition()（含乐观锁和日志记录）、getValidNextStates()
   - 创建 `src/workflow/stateMachine.test.ts`：41 个单元测试覆盖正向转换、回退转换、非法转换、重试计数器、并发冲突检测
   - 139 个测试全部通过
+- 完成 Task 3.5：实现工作流引擎
+  - 创建 `src/workflow/workflowEngine.ts`：startWorkflow()、advanceWorkflow()、revertWorkflow()、handleMeetingUpdateForAllTasks()、getWorkflowStatus()
+  - 事件到状态的映射逻辑（assignment→Assigned、dev_complete→VerificationPending 等）
+  - 会议更新批量回退逻辑
+  - 创建 `src/workflow/workflowEngine.test.ts`：26 个单元测试
+  - 165 个测试全部通过

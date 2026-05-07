@@ -64,3 +64,9 @@
   - Created `src/workflow/stateMachine.ts`: 16 valid transition rules, validateTransition(), transition() with optimistic locking and audit logging, getValidNextStates()
   - Created `src/workflow/stateMachine.test.ts`: 41 unit tests covering forward transitions, revert transitions, invalid transitions, retry counter, concurrent modification detection
   - All 139 tests passing
+- Completed Task 3.5: Implement workflow engine
+  - Created `src/workflow/workflowEngine.ts`: startWorkflow(), advanceWorkflow(), revertWorkflow(), handleMeetingUpdateForAllTasks(), getWorkflowStatus()
+  - Event-to-state mapping logic (assignment→Assigned, dev_complete→VerificationPending, etc.)
+  - Meeting update bulk revert logic
+  - Created `src/workflow/workflowEngine.test.ts`: 26 unit tests
+  - All 165 tests passing
