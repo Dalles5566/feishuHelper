@@ -21,14 +21,14 @@
     - 创建基础的数据库查询工具函数
     - _Requirements: 9.1, 9.2_
 
-  - [ ] 1.3 配置环境变量与应用配置
+  - [x] 1.3 配置环境变量与应用配置
     - 创建 `src/config/index.ts`，定义所有配置项（飞书 App ID/Secret、LLM API Key、数据库连接、Redis 连接等）
     - 创建 `.env.example` 模板文件
     - 实现配置验证逻辑，启动时检查必要配置是否存在
     - _Requirements: 10.1, 10.4_
 
-- [ ] 2. 核心类型定义与错误处理
-  - [ ] 2.1 定义核心 TypeScript 接口和类型
+- [x] 2. 核心类型定义与错误处理
+  - [x] 2.1 定义核心 TypeScript 接口和类型
     - 创建 `src/models/task.ts`：Task, SubTask, TaskState, TaskCreateParams 等类型
     - 创建 `src/models/meeting.ts`：Meeting, MeetingAnalysis, ActionItem, MeetingSummary 等类型
     - 创建 `src/models/workflow.ts`：WorkflowEvent, WorkflowStatus, StateTransition 等类型
@@ -37,7 +37,7 @@
     - 创建 `src/models/index.ts` 统一导出
     - _Requirements: 2.3, 4.2, 5.3, 9.1_
 
-  - [ ] 2.2 实现统一错误处理框架
+  - [x] 2.2 实现统一错误处理框架
     - 创建 `src/utils/errors.ts`：定义 AppError 类、ErrorCategory 枚举
     - 创建 `src/utils/retry.ts`：实现指数退避重试策略（RetryPolicy, withRetry 函数）
     - 实现错误分类逻辑：feishu_api, llm_service, state_transition, validation, business_logic
@@ -48,8 +48,8 @@
     - 验证对于 N 次连续失败，第 K 次重试延迟与 2^K 成正比
     - **Validates: Requirements 10.2**
 
-- [ ] 3. 状态机与工作流引擎
-  - [ ] 3.1 实现任务状态机
+- [-] 3. 状态机与工作流引擎
+  - [x] 3.1 实现任务状态机
     - 创建 `src/workflow/stateMachine.ts`：定义合法状态转换表
     - 实现 `validateTransition(fromState, toState): boolean` 函数
     - 实现 `transition(taskId, toState, context): Promise<boolean>` 函数，包含乐观锁

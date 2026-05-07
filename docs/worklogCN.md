@@ -43,13 +43,24 @@
   - 创建 `src/config/database.ts`，实现连接池管理（getPool、closePool、runMigrations）
   - 创建 `src/utils/db.ts`，封装数据库操作工具函数（query、queryOne、insert、update、remove、withTransaction）
   - 18 个单元测试全部通过
-- 完成 Task 2：核心类型定义与错误处理框架
-  - 创建 `src/models/task.ts`、`meeting.ts`、`workflow.ts`、`verification.ts`、`document.ts`、`index.ts`，定义所有核心 TypeScript 类型
-  - 创建 `src/utils/errors.ts`：AppError 类，5 种错误分类，静态工厂方法，常用错误码常量
-  - 创建 `src/utils/retry.ts`：指数退避重试策略，withRetry() 函数，可注入 sleep（方便测试）
-  - 98 个单元测试全部通过
 - 完成 Task 1.3：环境变量与应用配置
   - 创建 `src/config/index.ts`，定义所有配置项（飞书、LLM、数据库、Redis、应用），启动时验证必填项
   - 创建 `.env.example` 模板文件，覆盖所有支持的环境变量
   - 40 个单元测试全部通过
   - 配置本地开发环境：使用 Docker 运行 PostgreSQL（端口 5432）和 Redis（端口 6379）
+
+---
+
+## 2026-05-07（周四）
+
+### 今日完成内容
+
+- 完成 Task 2：核心类型定义与错误处理框架
+  - 创建 `src/models/task.ts`、`meeting.ts`、`workflow.ts`、`verification.ts`、`document.ts`、`index.ts`，定义所有核心 TypeScript 类型
+  - 创建 `src/utils/errors.ts`：AppError 类，5 种错误分类，静态工厂方法，常用错误码常量
+  - 创建 `src/utils/retry.ts`：指数退避重试策略，withRetry() 函数，可注入 sleep（方便测试）
+  - 98 个单元测试全部通过
+- 完成 Task 3.1：实现任务状态机
+  - 创建 `src/workflow/stateMachine.ts`：16 条合法状态转换规则、validateTransition()、transition()（含乐观锁和日志记录）、getValidNextStates()
+  - 创建 `src/workflow/stateMachine.test.ts`：41 个单元测试覆盖正向转换、回退转换、非法转换、重试计数器、并发冲突检测
+  - 139 个测试全部通过
