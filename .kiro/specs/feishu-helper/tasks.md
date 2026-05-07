@@ -72,7 +72,7 @@
     - 生成随机失败序列，验证每次失败回退时计数器递增 1，且 failureContext 非空
     - **Validates: Requirements 9.4**
 
-  - [ ] 3.5 实现工作流引擎
+  - [x] 3.5 实现工作流引擎
     - 创建 `src/workflow/workflowEngine.ts`：实现 WorkflowEngine 接口
     - 实现 `startWorkflow`：从会议分析结果启动工作流
     - 实现 `advanceWorkflow`：根据事件推进工作流
