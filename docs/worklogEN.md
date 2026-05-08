@@ -128,3 +128,17 @@
   - Registers Feishu MCP tools as LangChain DynamicStructuredTool instances
   - Implements session context management (getContext, clearContext, trimContext)
   - Created `src/agent/agentCore.test.ts`: 25 unit tests
+- Understood MeetingAnalyzer design:
+  - Three methods: `analyze` (full analysis), `extractActionItems` (action items only), `generateSummary` (summary only) — same capability at different granularity
+  - Uses Zod schema to define LLM return format; `.describe()` text is a hint for the LLM
+  - Long content handling: split into overlapping chunks → analyze each separately → LLM merges and deduplicates; final result is same as sending full content at once
+  - `JSON.stringify(chunkResults, null, 2)` converts objects to formatted JSON string to send to LLM
+  - actionItems and decisions don't correspond by array index; they're linked semantically via context field and IDs
+
+### What was done today (continued 2)
+
+- Completed Task 6.2: Implement Meeting Analyzer (all 265 tests passing)
+  - Created `src/services/meetingAnalyzer.ts`: LangChain.js structured output parsing
+  - Implemented analyze, extractActionItems, generateSummary methods
+  - Implemented long content chunking and merge logic
+  - Created `src/services/meetingAnalyzer.test.ts`: 18 unit tests
