@@ -100,3 +100,14 @@
   - **FeishuEvent = 顾客**：只需要告诉系统事件是什么类型，主管自动找对应员工处理
   - **EventHandler 是函数类型约定**：凡是想注册的函数，必须接收 FeishuEvent 参数并返回 Promise<void>
 - 理解了 Webhook 签名验证的意义：服务器暴露在公网，任何人都可以往 URL 发请求。签名验证通过 encryptKey（只有你和飞书知道）确保请求真的来自飞书，防止伪造
+- 理解了 FeishuAuthService（Token 管理）的设计：
+  - 核心逻辑：用 appId + appSecret 向飞书换 token → 存 Redis → 下次直接从 Redis 取
+  - **提前 5 分钟刷新**：不等 token 真的过期才换，留缓冲时间避免"取到 token 但调 API 时刚好过期"的窗口期
+  - **并发去重（refreshPromise）**：100 个请求同时发现没 token，只让第一个去飞书换，其余 99 个等同一个 Promise，避免打爆飞书 API
+  - 这些边缘情况是生产环境经验积累出来的，不是一开始就能想到的
+- 理解了 FeishuMcpService（飞书 MCP 集成）的设计：
+  - MCP 是飞书官方工具包，把飞书 API 封装成一个个"工具"（如 task_create、im_send_message），不用自己拼 HTTP 请求
+  - `FeishuMcpService` 是 MCP 的包装层，加了三个东西：自动带 token、统一错误分类、自动重试
+  - 使用方式：`mcp.callTool('task_create', { title: '...' })`，token/重试/错误处理全在内部搞定
+  - 现在只是把管道接好了（准备好了可以随时调用），等后面 AI Agent 和 Task Manager 实现后才会真正调用
+  - constructor 里的 `private readonly` 类似 Java 的 `private final` + `@Autowired`：依赖注入，测试时传 mock，生产时用真实实例

@@ -100,3 +100,14 @@
   - **FeishuEvent = customer**: just needs to tell the system what type of event it is; the manager finds the right employee automatically
   - **EventHandler is a function type contract**: any function that wants to register must accept a FeishuEvent parameter and return Promise<void>
 - Understood why Webhook signature verification matters: the server is exposed on the public internet, anyone can POST to the URL. Signature verification uses encryptKey (known only to you and Feishu) to prove the request genuinely came from Feishu, preventing forgery
+- Understood FeishuAuthService (Token Management) design:
+  - Core logic: exchange appId + appSecret for a token from Feishu → store in Redis → next time read directly from Redis
+  - **Proactive refresh 5 minutes early**: don't wait until the token actually expires; leave buffer time to avoid the "fetched token but it expired by the time the API call reaches Feishu" window
+  - **Concurrent deduplication (refreshPromise)**: if 100 requests simultaneously discover no token, only the first one calls Feishu; the other 99 await the same Promise, preventing API flooding
+  - These edge cases come from production experience, not something you'd think of on the first try
+- Understood FeishuMcpService (Feishu MCP Integration) design:
+  - MCP is Feishu's official toolkit that wraps Feishu APIs into callable "tools" (e.g., task_create, im_send_message) — no need to manually construct HTTP requests
+  - `FeishuMcpService` is a wrapper around MCP that adds three things: automatic token injection, unified error classification, and automatic retry
+  - Usage: `mcp.callTool('task_create', { title: '...' })` — token/retry/error handling all handled internally
+  - Right now it's just "pipes connected" (ready to be called); actual calls happen later when AI Agent and Task Manager are implemented
+  - `private readonly` in the constructor is like Java's `private final` + `@Autowired`: dependency injection — pass mocks in tests, real instances in production
