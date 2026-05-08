@@ -111,3 +111,20 @@
   - 使用方式：`mcp.callTool('task_create', { title: '...' })`，token/重试/错误处理全在内部搞定
   - 现在只是把管道接好了（准备好了可以随时调用），等后面 AI Agent 和 Task Manager 实现后才会真正调用
   - constructor 里的 `private readonly` 类似 Java 的 `private final` + `@Autowired`：依赖注入，测试时传 mock，生产时用真实实例
+- 理解了 AgentCore（AI Agent 核心）的设计：
+  - 整个系统的"大脑"，把 LLM（GPT-4/Claude）和飞书 MCP 工具连在一起
+  - 核心方法 `processInput`：收消息 → 问 LLM → LLM 可能调工具 → 工具结果反馈给 LLM → 最终回复用户
+  - **tool-calling loop**：LLM 可能需要多次调工具才能完成任务（如创建 3 个 ticket），循环直到 LLM 给出纯文字回复
+  - **会话历史**：LLM 本身没有记忆，每次调用都要把之前所有对话重新发一遍。超过 50 条就裁剪最早的
+  - **bindTools**：告诉 LLM "你可以用这些工具"，本质是在 API 请求里多加一个字段描述可用工具
+  - **AgentCore 不直接调 workflow 或数据库**：它只负责"对话 + 调 MCP 工具"，workflow 和数据库的串联在 Task 14 集成时完成
+  - LLM 自己决定 ticket 内容——从会议纪要里提取信息，自己填好参数调 task_create
+
+### 今日完成内容（续）
+
+- 完成 Task 6.1：实现 AI Agent Core（247 个测试全部通过）
+  - 创建 `src/agent/agentCore.ts`：基于 LangChain.js 的 tool-calling Agent
+  - 支持 OpenAI 和 Anthropic 两种 LLM Provider
+  - 注册飞书 MCP 工具为 LangChain DynamicStructuredTool
+  - 实现会话上下文管理（getContext、clearContext、trimContext）
+  - 创建 `src/agent/agentCore.test.ts`：25 个单元测试

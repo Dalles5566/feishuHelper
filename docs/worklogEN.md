@@ -111,3 +111,20 @@
   - Usage: `mcp.callTool('task_create', { title: '...' })` — token/retry/error handling all handled internally
   - Right now it's just "pipes connected" (ready to be called); actual calls happen later when AI Agent and Task Manager are implemented
   - `private readonly` in the constructor is like Java's `private final` + `@Autowired`: dependency injection — pass mocks in tests, real instances in production
+- Understood AgentCore (AI Agent Core) design:
+  - The system's "brain" — connects LLM (GPT-4/Claude) with Feishu MCP tools
+  - Core method `processInput`: receive message → ask LLM → LLM may call tools → feed tool results back to LLM → final reply to user
+  - **tool-calling loop**: LLM may need multiple tool calls to complete a task (e.g., creating 3 tickets), loops until LLM gives a plain text response
+  - **Conversation history**: LLM has no memory; every call must resend all previous messages. Trims oldest messages when exceeding 50
+  - **bindTools**: tells LLM "you can use these tools" — essentially adds a field to the API request describing available tools
+  - **AgentCore doesn't directly call workflow or database**: it only handles "conversation + MCP tool calls"; workflow/DB integration happens in Task 14
+  - LLM decides ticket content itself — extracts info from meeting minutes and fills in the parameters for task_create
+
+### What was done today (continued)
+
+- Completed Task 6.1: Implement AI Agent Core (all 247 tests passing)
+  - Created `src/agent/agentCore.ts`: LangChain.js-based tool-calling Agent
+  - Supports both OpenAI and Anthropic LLM providers
+  - Registers Feishu MCP tools as LangChain DynamicStructuredTool instances
+  - Implements session context management (getContext, clearContext, trimContext)
+  - Created `src/agent/agentCore.test.ts`: 25 unit tests
