@@ -70,3 +70,33 @@
   - 会议更新批量回退逻辑
   - 创建 `src/workflow/workflowEngine.test.ts`：26 个单元测试
   - 165 个测试全部通过
+
+---
+
+## 2026-05-08（周五）
+
+### 今日学习笔记
+
+- 理解了 `errors.ts` + `retry.ts` 的设计思路：
+  - `errors.ts`：统一错误分类系统。把所有错误分成 5 类（feishu_api、llm_service、state_transition、validation、business_logic），每类有不同的处理策略（能不能重试、重试几次）
+  - `retry.ts`：指数退避重试工具。核心是 `withRetry(fn)` 函数——把 try/catch 和重试逻辑封装在一起，把要执行的函数传进去，如果函数抛错了，`withRetry` 会 catch 住，判断错误类别能不能重试，能的话等一段时间（每次翻倍）再执行一次，不能的话直接把错误抛出去
+  - 使用方式：需要主动 call，不是自动拦截。在调外部 API（飞书、LLM）的地方用 `withRetry(() => apiCall())` 包裹，内部逻辑不需要重试的就直接抛 AppError
+
+### 今日完成内容
+
+- 修复 tasks.md 中的任务状态标记（Task 1、3 恢复为进行中，3.3 恢复为可选，3.5 标记为已完成）
+- 完成 Task 4 Checkpoint：状态机和工作流引擎 67 个测试全部通过
+- 完成 Task 5：Webhook Gateway 与飞书集成（222 个测试全部通过）
+  - 5.1 Webhook Gateway：签名验证、URL Challenge、事件分发
+  - 5.2 飞书认证与 Token 管理：App 凭证认证、Redis 缓存、过期前主动刷新
+  - 5.3 飞书 MCP 集成：LarkMcpTool 封装、统一错误处理、指数退避限流
+
+### 今日学习笔记（续）
+
+- 理解了 Webhook Gateway 中 EventDispatcher 的设计：
+  - **EventDispatcher = 主管**：知道"这件事该谁负责"，负责分配任务，不关心业务逻辑
+  - **Handler = 员工**：真正做事的函数，专门处理某种事件类型
+  - **register = 登记上岗**：员工告诉主管"我在这里，我专门处理这类事件"
+  - **FeishuEvent = 顾客**：只需要告诉系统事件是什么类型，主管自动找对应员工处理
+  - **EventHandler 是函数类型约定**：凡是想注册的函数，必须接收 FeishuEvent 参数并返回 Promise<void>
+- 理解了 Webhook 签名验证的意义：服务器暴露在公网，任何人都可以往 URL 发请求。签名验证通过 encryptKey（只有你和飞书知道）确保请求真的来自飞书，防止伪造

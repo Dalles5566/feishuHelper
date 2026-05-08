@@ -70,3 +70,33 @@
   - Meeting update bulk revert logic
   - Created `src/workflow/workflowEngine.test.ts`: 26 unit tests
   - All 165 tests passing
+
+---
+
+## 2026-05-08 (Friday)
+
+### Learning Notes
+
+- Understood the design of `errors.ts` + `retry.ts`:
+  - `errors.ts`: Unified error classification system. All errors are categorized into 5 types (feishu_api, llm_service, state_transition, validation, business_logic), each with different handling strategies (retryable or not, how many retries)
+  - `retry.ts`: Exponential backoff retry utility. The core is `withRetry(fn)` — it wraps try/catch and retry logic together. You pass in the function to execute; if it throws, `withRetry` catches it, checks the error category to decide if it's retryable, waits (doubling each time) and retries, or re-throws immediately if not retryable
+  - Usage: Must be called explicitly, not automatic interception. Wrap external API calls (Feishu, LLM) with `withRetry(() => apiCall())`; internal logic that shouldn't retry just throws AppError directly
+
+### What was done today
+
+- Fixed task status markers in tasks.md (Task 1, 3 restored to in-progress, 3.3 restored to optional, 3.5 marked as completed)
+- Completed Task 4 Checkpoint: all 67 state machine and workflow engine tests passing
+- Completed Task 5: Webhook Gateway and Feishu integration (all 222 tests passing)
+  - 5.1 Webhook Gateway: signature verification, URL Challenge, event dispatching
+  - 5.2 Feishu Auth & Token Management: App credentials auth, Redis caching, proactive refresh before expiry
+  - 5.3 Feishu MCP Integration: LarkMcpTool wrapper, unified error handling, exponential backoff rate limiting
+
+### Learning Notes (continued)
+
+- Understood the EventDispatcher design in Webhook Gateway:
+  - **EventDispatcher = manager**: knows "who handles what", dispatches tasks, doesn't care about business logic
+  - **Handler = employee**: the function that actually does the work, specialized for a specific event type
+  - **register = clocking in**: the employee tells the manager "I'm here, I handle this type of event"
+  - **FeishuEvent = customer**: just needs to tell the system what type of event it is; the manager finds the right employee automatically
+  - **EventHandler is a function type contract**: any function that wants to register must accept a FeishuEvent parameter and return Promise<void>
+- Understood why Webhook signature verification matters: the server is exposed on the public internet, anyone can POST to the URL. Signature verification uses encryptKey (known only to you and Feishu) to prove the request genuinely came from Feishu, preventing forgery

@@ -85,11 +85,11 @@
     - 生成各状态的任务，验证会议更新时超过 Created 状态的任务正确回退
     - **Validates: Requirements 9.5**
 
-- [ ] 4. Checkpoint - 确保状态机和工作流引擎测试通过
+- [x] 4. Checkpoint - 确保状态机和工作流引擎测试通过
   - 确保所有测试通过，如有问题请向用户确认。
 
-- [ ] 5. Webhook Gateway 与飞书集成
-  - [ ] 5.1 实现 Webhook Gateway
+- [x] 5. Webhook Gateway 与飞书集成
+  - [x] 5.1 实现 Webhook Gateway
     - 创建 `src/gateway/webhookGateway.ts`：实现 Fastify 路由
     - 实现飞书事件签名验证（`verifySignature`）
     - 实现 URL Challenge 验证（飞书注册 Webhook 时的验证请求）
@@ -97,13 +97,13 @@
     - 处理消息事件（`im.message.receive_v1`）和卡片回调事件
     - _Requirements: 10.1, 10.4_
 
-  - [ ] 5.2 实现飞书认证与 Token 管理
+  - [x] 5.2 实现飞书认证与 Token 管理
     - 创建 `src/services/feishuAuth.ts`：实现 OAuth 2.0 / App 凭证认证
     - 实现 Token 自动刷新逻辑（过期前主动刷新）
     - 实现 Token 缓存（Redis）
     - _Requirements: 10.1, 10.3_
 
-  - [ ] 5.3 配置飞书 MCP 集成
+  - [x] 5.3 配置飞书 MCP 集成
     - 创建 `src/services/feishuMcp.ts`：初始化 `@larksuiteoapi/lark-mcp` 客户端
     - 封装 MCP 工具调用接口，统一错误处理和重试
     - 实现 API 限流处理（指数退避）
