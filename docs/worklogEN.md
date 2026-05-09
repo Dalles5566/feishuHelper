@@ -142,3 +142,20 @@
   - Implemented analyze, extractActionItems, generateSummary methods
   - Implemented long content chunking and merge logic
   - Created `src/services/meetingAnalyzer.test.ts`: 18 unit tests
+- Completed Task 7.1: Implement Task Manager (all 291 tests passing)
+  - Created `src/services/taskManager.ts`: task CRUD operations
+  - createTask: Feishu MCP creation + local DB persistence + 3 retries
+  - splitTask: split into subtasks + scope overlap detection
+  - updateTaskDescription: update description + preserve full history
+  - updateTaskState: delegate to state machine for state transitions
+  - Created `src/services/taskManager.test.ts`: 26 unit tests
+- Added task description format requirement to steering rules (summary + key points + change history with newest date first)
+
+### Learning Notes (continued 2)
+
+- Understood the layering of taskManager, workflowEngine, and stateMachine:
+  - **stateMachine** (lowest): pure rules — can state A transition to state B? No business knowledge
+  - **workflowEngine** (middle): translates business events into state transitions, calls stateMachine
+  - **taskManager** (top): manages task CRUD, calls stateMachine when state needs changing
+- Understood createTask flow: validate params → call Feishu MCP (with retry) → persist to local DB → return
+- Feishu MCP response format is uncertain; code handles multiple formats (JSON/plain text), to be confirmed during integration

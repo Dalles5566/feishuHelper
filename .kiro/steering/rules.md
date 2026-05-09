@@ -35,3 +35,27 @@
 
 - This project is fully AI-assisted. Note this in documentation where appropriate.
 - Rules may evolve over time. Update this file as new conventions are established.
+
+## Task Description Format
+
+When updating a task's description (via `updateTaskDescription`), the LLM should generate content in this format:
+
+```
+## 总概括
+[One-sentence summary of the task's current goal]
+
+## 要点
+- [Key point 1]
+- [Key point 2]
+- ...
+
+## 变更历史
+- [Latest date]: [What was decided/changed in that meeting]
+- [Earlier date]: [What was decided/changed in that meeting]
+- ...
+```
+
+Rules:
+- 变更历史 shows the most recent date first (newest on top)
+- Each entry references which meeting triggered the change
+- 总概括 and 要点 always reflect the latest state (not historical)

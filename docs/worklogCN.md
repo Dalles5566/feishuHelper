@@ -142,3 +142,20 @@
   - 实现 analyze、extractActionItems、generateSummary 三个方法
   - 实现超长内容分段处理和合并逻辑
   - 创建 `src/services/meetingAnalyzer.test.ts`：18 个单元测试
+- 完成 Task 7.1：实现 Task Manager（291 个测试全部通过）
+  - 创建 `src/services/taskManager.ts`：任务 CRUD 操作
+  - createTask：飞书 MCP 创建 + 本地数据库持久化 + 重试 3 次
+  - splitTask：拆分子任务 + scope 重叠检测
+  - updateTaskDescription：更新描述 + 保留完整历史
+  - updateTaskState：调状态机执行状态转换
+  - 创建 `src/services/taskManager.test.ts`：26 个单元测试
+- 在 steering rules 中记录了任务描述格式要求（总概括 + 要点 + 变更历史，最新日期在最上面）
+
+### 今日学习笔记（续2）
+
+- 理解了 taskManager、workflowEngine、stateMachine 三者的分层关系：
+  - **stateMachine**（最底层）：纯规则——状态 A 能不能转到状态 B，不知道业务
+  - **workflowEngine**（中间层）：把业务事件翻译成状态转换，调 stateMachine 执行
+  - **taskManager**（最上层）：管任务本身的 CRUD，需要改状态时调 stateMachine
+- 理解了 createTask 的流程：验证参数 → 调飞书 MCP 创建（带重试）→ 存本地数据库 → 返回
+- 飞书 MCP 返回格式不确定，代码做了多种兼容（JSON/纯文本），等联调时确认

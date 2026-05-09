@@ -109,8 +109,8 @@
     - 实现 API 限流处理（指数退避）
     - _Requirements: 10.1, 10.2, 10.5_
 
-- [ ] 6. AI Agent Core 与会议分析
-  - [ ] 6.1 实现 AI Agent Core
+- [x] 6. AI Agent Core 与会议分析
+  - [x] 6.1 实现 AI Agent Core
     - 创建 `src/agent/agentCore.ts`：基于 LangChain.js 实现 Agent
     - 配置 LLM Provider（支持 OpenAI GPT-4 / Claude）
     - 注册飞书 MCP 工具到 Agent
@@ -118,7 +118,7 @@
     - 实现 Agent 输入处理和动作输出逻辑
     - _Requirements: 1.2, 2.1_
 
-  - [ ] 6.2 实现 Meeting Analyzer
+  - [x] 6.2 实现 Meeting Analyzer
     - 创建 `src/services/meetingAnalyzer.ts`：实现会议纪要分析
     - 实现 `analyze(content)`：调用 LLM 生成结构化分析结果
     - 实现 `extractActionItems(content)`：提取行动项，包含优先级、建议分配人、依赖关系
