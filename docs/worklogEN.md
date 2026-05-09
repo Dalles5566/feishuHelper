@@ -159,3 +159,26 @@
   - **taskManager** (top): manages task CRUD, calls stateMachine when state needs changing
 - Understood createTask flow: validate params → call Feishu MCP (with retry) → persist to local DB → return
 - Feishu MCP response format is uncertain; code handles multiple formats (JSON/plain text), to be confirmed during integration
+
+---
+
+## 2026-05-09 (Friday)
+
+### What was done today
+
+- Completed Task 7.3: Implement task assignment management (all 310 tests passing)
+  - Created `src/services/taskAssignment.ts`: assignment relationship CRUD
+  - assignTask: create assignment record; marks old record as reassigned on reassignment
+  - confirmAssignment: developer confirms acceptance of task
+  - completeAssignment: marks assignment as completed when task is done
+  - getActiveAssignments: view all currently active assignments
+  - Created `src/services/taskAssignment.test.ts`: 19 unit tests
+
+### Learning Notes
+
+- Understood the difference between `task_assignments` table and `tasks` table:
+  - `tasks` table: task's own state (11 states: Created → ... → Completed)
+  - `task_assignments` table: assignment relationship (3 statuses: active, reassigned, completed)
+  - Creating a task only writes to tasks table; assignment only happens when someone assigns it
+  - Not every state change touches both tables — only assignment-related operations affect both
+- Understood confirmAssignment purpose: developer confirms acceptance before monitoring begins; can be skipped for standup meeting scenarios

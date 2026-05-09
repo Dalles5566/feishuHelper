@@ -159,3 +159,26 @@
   - **taskManager**（最上层）：管任务本身的 CRUD，需要改状态时调 stateMachine
 - 理解了 createTask 的流程：验证参数 → 调飞书 MCP 创建（带重试）→ 存本地数据库 → 返回
 - 飞书 MCP 返回格式不确定，代码做了多种兼容（JSON/纯文本），等联调时确认
+
+---
+
+## 2026-05-09（周五）
+
+### 今日完成内容
+
+- 完成 Task 7.3：实现任务分配管理（310 个测试全部通过）
+  - 创建 `src/services/taskAssignment.ts`：分配关系 CRUD
+  - assignTask：创建分配记录，重新分配时旧记录标记为 reassigned
+  - confirmAssignment：开发者确认接受任务
+  - completeAssignment：任务完成时标记分配为 completed
+  - getActiveAssignments：查看当前所有活跃分配关系
+  - 创建 `src/services/taskAssignment.test.ts`：19 个单元测试
+
+### 今日学习笔记
+
+- 理解了 `task_assignments` 表和 `tasks` 表的区别：
+  - `tasks` 表：任务本身的状态（11 种：Created → ... → Completed）
+  - `task_assignments` 表：分配关系（3 种状态：active、reassigned、completed）
+  - 创建任务时只写 tasks 表，分配时才写 task_assignments 表
+  - 不是每次状态变更都改两张表，只有跟分配相关的操作才同时动两边
+- 理解了 confirmAssignment 的意义：开发者确认接受任务后才开始监控进度，对于晨会场景可以跳过
