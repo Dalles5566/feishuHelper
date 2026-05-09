@@ -283,6 +283,10 @@ interface VerificationReport {
   generatedAt: string;
 }
 
+// 注意：无论 AI 验证结果如何（passed/failed/ambiguous），任务都会推进到
+// VerificationPassed（进入 QA 阶段）。AI 的 score 和 discrepancies 会作为
+// 参考信息带给 QA，由人工做最终判断。
+
 interface Discrepancy {
   criterion: string;
   expected: string;

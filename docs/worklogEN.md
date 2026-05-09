@@ -182,3 +182,21 @@
   - Creating a task only writes to tasks table; assignment only happens when someone assigns it
   - Not every state change touches both tables — only assignment-related operations affect both
 - Understood confirmAssignment purpose: developer confirms acceptance before monitoring begins; can be skipped for standup meeting scenarios
+
+### What was done today (continued)
+
+- Completed Task 8 Checkpoint: all 310 tests passing
+- Completed Task 9.1: Implement Code Verifier (all 336 tests passing)
+  - Created `src/services/codeVerifier.ts`: LLM compares code against task description
+  - **Design decision: regardless of AI verification result, always advance to QA** — AI score and discrepancies serve as reference for QA
+  - Token limit exceeded → auto-generate ambiguous report, don't block flow
+  - Verification report persisted to verification_reports table
+  - Created `src/services/codeVerifier.test.ts`: 26 unit tests
+  - Updated design.md and tasks.md to reflect new design decision
+
+### Learning Notes (continued)
+
+- Understood CodeVerifier workflow: sends git diff + acceptance criteria to LLM, LLM judges if code meets standards
+- Understood `withStructuredOutput`: LangChain method that takes a Zod schema and forces LLM to return JSON in that format
+- Understood `skipWorkflowAdvance`: test-only toggle to skip workflow advancement and test verification logic in isolation
+- Design decision: AI verification never blocks flow, always proceeds to QA, humans make final call. May skip codeVerifier entirely in the future

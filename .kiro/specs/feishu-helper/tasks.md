@@ -163,13 +163,13 @@
 - [x] 8. Checkpoint - 确保任务管理模块测试通过
   - 确保所有测试通过，如有问题请向用户确认。
 
-- [ ] 9. 代码验证模块
-  - [ ] 9.1 实现 Code Verifier
+- [x] 9. 代码验证模块
+  - [x] 9.1 实现 Code Verifier
     - 创建 `src/services/codeVerifier.ts`：实现代码验证逻辑
     - 实现 `verify(taskId, codeContext)`：调用 LLM 对比代码与任务描述
     - 生成 VerificationReport：包含 matchScore、matchedCriteria、unmatchedCriteria、discrepancies、recommendations
-    - 实现验证通过/失败后的工作流推进逻辑
-    - 实现需求模糊时的标记和建议逻辑
+    - **无论 AI 验证结果如何，任务都推进到 VerificationPassed（进入 QA）**，AI 的 score 和 discrepancies 作为参考信息带给 QA
+    - 实现需求模糊时的标记和建议逻辑（status: ambiguous）
     - 将验证报告持久化到 `verification_reports` 表
     - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5_
 

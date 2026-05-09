@@ -283,6 +283,10 @@ interface VerificationReport {
   generatedAt: string;
 }
 
+// Note: Regardless of AI verification status, the task always advances to
+// VerificationPassed (QA stage). The AI score and discrepancies are surfaced
+// in the workflow event payload for QA reference. Humans make the final call.
+
 interface Discrepancy {
   criterion: string;
   expected: string;

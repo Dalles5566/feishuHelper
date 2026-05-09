@@ -182,3 +182,21 @@
   - 创建任务时只写 tasks 表，分配时才写 task_assignments 表
   - 不是每次状态变更都改两张表，只有跟分配相关的操作才同时动两边
 - 理解了 confirmAssignment 的意义：开发者确认接受任务后才开始监控进度，对于晨会场景可以跳过
+
+### 今日完成内容（续）
+
+- 完成 Task 8 Checkpoint：310 个测试全部通过
+- 完成 Task 9.1：实现 Code Verifier（336 个测试全部通过）
+  - 创建 `src/services/codeVerifier.ts`：LLM 对比代码与任务描述
+  - **设计决策：无论 AI 验证结果如何，都推进到 QA**，AI 的 score 和 discrepancies 作为参考
+  - Token 超限时自动生成 ambiguous 报告，不 block 流程
+  - 验证报告持久化到 verification_reports 表
+  - 创建 `src/services/codeVerifier.test.ts`：26 个单元测试
+  - 更新 design.md 和 tasks.md 反映新的设计决策
+
+### 今日学习笔记（续）
+
+- 理解了 CodeVerifier 的工作方式：把 git diff + 任务验收标准发给 LLM，LLM 判断代码是否满足标准
+- 理解了 `withStructuredOutput`：LangChain 的方法，传入 Zod schema 让 LLM 按固定格式返回 JSON
+- 理解了 `skipWorkflowAdvance`：测试用的开关，跳过工作流推进只测验证逻辑本身
+- 设计决策：AI 验证不 block 流程，永远进 QA，让人做最终判断。以后可能完全跳过 codeVerifier 这步
