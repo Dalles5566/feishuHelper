@@ -59,3 +59,12 @@ Rules:
 - 变更历史 shows the most recent date first (newest on top)
 - Each entry references which meeting triggered the change
 - 总概括 and 要点 always reflect the latest state (not historical)
+
+## Development Workflow Principles (inspired by Superpowers)
+
+- **Test after every change**: After modifying code, always run relevant tests before presenting the result
+- **Systematic debugging**: When something fails, analyze the root cause first (read logs, check state, trace the flow). Don't guess-and-check
+- **Verify before completion**: Before marking a task as done, confirm all tests pass and there are no TypeScript errors
+- **Design before code**: For non-trivial changes, explain the approach first, then implement
+- **Small focused changes**: Break large tasks into small, verifiable steps. Each step should be independently testable
+- **Evidence over claims**: Don't say "this should work" — run it and prove it works
