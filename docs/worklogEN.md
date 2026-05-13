@@ -4,7 +4,7 @@
 
 ---
 
-## 2026-05-05 (Tuesday)
+## 2026-05-05 (Monday)
 
 ### What was done today
 
@@ -51,7 +51,7 @@
 
 ---
 
-## 2026-05-07 (Thursday)
+## 2026-05-07 (Wednesday)
 
 ### What was done today
 
@@ -73,7 +73,7 @@
 
 ---
 
-## 2026-05-08 (Friday)
+## 2026-05-08 (Thursday)
 
 ### Learning Notes
 
@@ -162,7 +162,7 @@
 
 ---
 
-## 2026-05-09 (Saturday)
+## 2026-05-09 (Friday)
 
 ### What was done today
 
@@ -203,7 +203,7 @@
 
 ---
 
-## 2026-05-13 (Tuesday)
+## 2026-05-13 (Wednesday)
 
 ### What was done today
 
