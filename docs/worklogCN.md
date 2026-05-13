@@ -216,6 +216,16 @@
   - 创建 `src/services/docGenerator.test.ts`：24 个单元测试
 - 跳过 Task 10.3（MD 文档更新）和 10.5（使用手册编译）——不需要
 
+### 今日完成内容（续）
+
+- 完成 Task 11.1：实现 QA 反馈处理
+  - 创建 `src/services/qaFeedback.ts`：QA 结果提交和查询
+  - QA 通过 → 推进到 QAPassed
+  - QA 失败（需求错误/unknown）→ 回退到 Created
+  - QA 失败（实现错误）→ 回退到 InDevelopment
+  - failureType 不提供时默认为 unknown，回退到 Created
+  - 创建 `src/services/qaFeedback.test.ts`：10 个单元测试
+
 ### 今日学习笔记
 
 - docGenerator 跟 meetingAnalyzer、codeVerifier 是同一个套路：定义 Zod schema → 拼 prompt → 发给 LLM → 拿结构化结果

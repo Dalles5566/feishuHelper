@@ -216,6 +216,16 @@
   - Created `src/services/docGenerator.test.ts`: 24 unit tests
 - Skipped Task 10.3 (MD document update) and 10.5 (user manual compilation) — not needed
 
+### What was done today (continued)
+
+- Completed Task 11.1: Implement QA feedback processing
+  - Created `src/services/qaFeedback.ts`: QA result submission and retrieval
+  - QA pass → advance to QAPassed
+  - QA fail (requirement_error/unknown) → revert to Created
+  - QA fail (implementation_error) → revert to InDevelopment
+  - failureType defaults to unknown when not provided, reverts to Created
+  - Created `src/services/qaFeedback.test.ts`: 10 unit tests
+
 ### Learning Notes
 
 - docGenerator follows the same pattern as meetingAnalyzer and codeVerifier: define Zod schema → build prompt → send to LLM → get structured result
