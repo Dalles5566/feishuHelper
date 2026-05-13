@@ -231,3 +231,12 @@
 - docGenerator follows the same pattern as meetingAnalyzer and codeVerifier: define Zod schema → build prompt → send to LLM → get structured result
 - `generateTestDocument` is not for .test.ts files — it generates test case documents for QA engineers
 - `getLlm()` is identical code in all three services (can be extracted to a shared utility later)
+- Understood message queue (BullMQ) core concepts:
+  - **Why queues**: webhook must reply 200 quickly; slow operations (LLM calls, Feishu API) go to queue for background processing
+  - **Redis's role**: a "queue rack that never loses things". Messages survive server restarts, queue up when Worker is busy
+  - **BullMQ**: adds queue management logic on top of Redis (ordering, retry, failure handling, Worker scheduling)
+  - **Worker**: background code that continuously takes tasks from Redis and processes them
+  - **5 specialized queues**: not for webhook directly — used by AgentCore internally to dispatch sub-tasks
+  - **Entry queue**: webhook drops messages here, Worker picks up and calls AgentCore
+  - **Fire and forget**: drop into queue and move on, no need to wait for results
+  - **Fast operations don't need queues**: QA Feedback, Task Assignment take milliseconds, do them synchronously

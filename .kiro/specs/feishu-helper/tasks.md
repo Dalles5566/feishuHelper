@@ -234,11 +234,11 @@
     - 验证提交的 QA 反馈正确关联到任务，查询时能返回
     - **Validates: Requirements 6.4**
 
-- [ ] 12. Checkpoint - 确保所有模块测试通过
+- [x] 12. Checkpoint - 确保所有模块测试通过
   - 确保所有测试通过，如有问题请向用户确认。
 
-- [ ] 13. 消息队列与异步工作流
-  - [ ] 13.1 配置 BullMQ 任务队列
+- [x] 13. 消息队列与异步工作流
+  - [x] 13.1 配置 BullMQ 任务队列
     - 创建 `src/queue/index.ts`：配置 BullMQ 连接和队列定义
     - 定义队列：`meeting-analysis`, `task-creation`, `code-verification`, `doc-generation`, `notification`
     - 实现 Worker 处理器，连接到对应的服务模块

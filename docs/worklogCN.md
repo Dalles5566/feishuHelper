@@ -231,3 +231,12 @@
 - docGenerator 跟 meetingAnalyzer、codeVerifier 是同一个套路：定义 Zod schema → 拼 prompt → 发给 LLM → 拿结构化结果
 - `generateTestDocument` 不是给 .test.ts 用的，是给 QA 工程师看的测试用例文档
 - `getLlm()` 在三个 service 里都是一样的代码（后续可以抽成共享工具函数）
+- 理解了消息队列（BullMQ）的核心概念：
+  - **为什么需要队列**：webhook 收到请求后要快速回复 200，耗时操作（调 LLM、调飞书 API）放队列里后台处理
+  - **Redis 的角色**：不会丢东西的排队架。服务器重启消息还在，Worker 忙的时候消息排队等
+  - **BullMQ**：在 Redis 上加了队列管理逻辑（排序、重试、失败处理、Worker 调度）
+  - **Worker**：不断从 Redis 取任务处理的后台代码，像厨师不停从窗口取订单
+  - **5 个专用队列**：不是给 webhook 直接用的，是给 AgentCore 内部分发子任务用的
+  - **入口队列**：webhook 丢消息进来，Worker 取出调 AgentCore
+  - **fire and forget**：丢进队列就不管了，不需要等结果回传
+  - **快操作不需要队列**：QA Feedback、Task Assignment 几毫秒搞定，直接同步做
