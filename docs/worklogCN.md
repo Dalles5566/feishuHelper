@@ -162,7 +162,7 @@
 
 ---
 
-## 2026-05-09（周五）
+## 2026-05-09（周六）
 
 ### 今日完成内容
 
@@ -200,3 +200,24 @@
 - 理解了 `withStructuredOutput`：LangChain 的方法，传入 Zod schema 让 LLM 按固定格式返回 JSON
 - 理解了 `skipWorkflowAdvance`：测试用的开关，跳过工作流推进只测验证逻辑本身
 - 设计决策：AI 验证不 block 流程，永远进 QA，让人做最终判断。以后可能完全跳过 codeVerifier 这步
+
+---
+
+## 2026-05-13（周二）
+
+### 今日完成内容
+
+- 在 steering rules 中添加了开发工作流原则（Superpowers 启发）
+- 完成 Task 10.1：实现测试文档生成（360 个测试全部通过）
+  - 创建 `src/services/docGenerator.ts`：基于 LLM 生成测试用例
+  - 生成正向、负向、边界条件测试用例
+  - 每个用例包含前置条件、步骤、预期结果
+  - 任务描述不足时标记缺失信息
+  - 创建 `src/services/docGenerator.test.ts`：24 个单元测试
+- 跳过 Task 10.3（MD 文档更新）和 10.5（使用手册编译）——不需要
+
+### 今日学习笔记
+
+- docGenerator 跟 meetingAnalyzer、codeVerifier 是同一个套路：定义 Zod schema → 拼 prompt → 发给 LLM → 拿结构化结果
+- `generateTestDocument` 不是给 .test.ts 用的，是给 QA 工程师看的测试用例文档
+- `getLlm()` 在三个 service 里都是一样的代码（后续可以抽成共享工具函数）

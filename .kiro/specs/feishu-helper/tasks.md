@@ -133,8 +133,8 @@
     - 测试错误情况处理
     - _Requirements: 1.2, 1.4, 1.5_
 
-- [ ] 7. 任务管理模块
-  - [ ] 7.1 实现 Task Manager
+- [x] 7. 任务管理模块
+  - [x] 7.1 实现 Task Manager
     - 创建 `src/services/taskManager.ts`：实现任务 CRUD 操作
     - 实现 `createTask`：通过飞书 MCP 创建任务，写入数据库
     - 实现 `splitTask`：将复杂任务拆分为子任务，确保范围不重叠
@@ -148,7 +148,7 @@
     - 生成随机更新序列，验证历史记录完整性（N 次更新产生 N 条历史）
     - **Validates: Requirements 2.5**
 
-  - [ ] 7.3 实现任务分配管理
+  - [x] 7.3 实现任务分配管理
     - 创建 `src/services/taskAssignment.ts`：实现分配关系管理
     - 实现分配记录创建和查询
     - 实现分配状态维护（active, reassigned, completed）
@@ -178,8 +178,8 @@
     - 验证任何验证操作都产生完整的报告结构，matched + unmatched = 全部验收标准
     - **Validates: Requirements 4.2**
 
-- [ ] 10. 文档生成模块
-  - [ ] 10.1 实现测试文档生成
+- [x] 10. 文档生成模块
+  - [x] 10.1 实现测试文档生成
     - 创建 `src/services/docGenerator.ts`：实现 DocGenerator 接口
     - 实现 `generateTestDocument(task)`：基于验收标准生成测试用例
     - 确保包含正向测试、负向测试、边界条件测试
@@ -192,11 +192,11 @@
     - 验证生成的测试文档包含至少一个正向、负向、边界测试用例，且字段非空
     - **Validates: Requirements 5.1, 5.2, 5.3**
 
-  - [ ] 10.3 实现 MD 文档更新
-    - 实现 `updateMDDocument(docId, content)`：更新现有文档的相关章节
-    - 保留原有文档结构，仅修改相关部分
-    - 自动更新版本号和 last-updated 时间戳
-    - 文档不存在时创建新文档
+  - [ ] ~~10.3 实现 MD 文档更新~~ (已跳过 - 不需要)
+    - ~~实现 `updateMDDocument(docId, content)`：更新现有文档的相关章节~~
+    - ~~保留原有文档结构，仅修改相关部分~~
+    - ~~自动更新版本号和 last-updated 时间戳~~
+    - ~~文档不存在时创建新文档~~
     - _Requirements: 7.1, 7.2, 7.3, 7.4_
 
   - [ ]* 10.4 编写文档更新保留的 Property Test
@@ -204,11 +204,11 @@
     - 生成随机文档和更新，验证原有章节保留、版本递增、时间戳更新
     - **Validates: Requirements 7.2, 7.3**
 
-  - [ ] 10.5 实现使用手册编译
-    - 实现 `compileUserManual(docIds)`：将多个 MD 文档编译为结构化手册
-    - 生成目录、章节导航、交叉引用
-    - 支持 Web 发布和 PDF 导出格式
-    - 实现增量更新：仅重新生成受影响的章节
+  - [ ] ~~10.5 实现使用手册编译~~ (已跳过 - 不需要)
+    - ~~实现 `compileUserManual(docIds)`：将多个 MD 文档编译为结构化手册~~
+    - ~~生成目录、章节导航、交叉引用~~
+    - ~~支持 Web 发布和 PDF 导出格式~~
+    - ~~实现增量更新：仅重新生成受影响的章节~~
     - _Requirements: 8.1, 8.2, 8.3, 8.4_
 
   - [ ]* 10.6 编写使用手册编译完整性的 Property Test

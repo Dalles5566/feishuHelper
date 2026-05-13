@@ -162,7 +162,7 @@
 
 ---
 
-## 2026-05-09 (Friday)
+## 2026-05-09 (Saturday)
 
 ### What was done today
 
@@ -200,3 +200,24 @@
 - Understood `withStructuredOutput`: LangChain method that takes a Zod schema and forces LLM to return JSON in that format
 - Understood `skipWorkflowAdvance`: test-only toggle to skip workflow advancement and test verification logic in isolation
 - Design decision: AI verification never blocks flow, always proceeds to QA, humans make final call. May skip codeVerifier entirely in the future
+
+---
+
+## 2026-05-13 (Tuesday)
+
+### What was done today
+
+- Added development workflow principles to steering rules (inspired by Superpowers framework)
+- Completed Task 10.1: Implement test document generation (all 360 tests passing)
+  - Created `src/services/docGenerator.ts`: LLM-based test case generation
+  - Generates positive, negative, and boundary condition test cases
+  - Each case includes preconditions, steps, and expected results
+  - Flags missing information when task description is insufficient
+  - Created `src/services/docGenerator.test.ts`: 24 unit tests
+- Skipped Task 10.3 (MD document update) and 10.5 (user manual compilation) — not needed
+
+### Learning Notes
+
+- docGenerator follows the same pattern as meetingAnalyzer and codeVerifier: define Zod schema → build prompt → send to LLM → get structured result
+- `generateTestDocument` is not for .test.ts files — it generates test case documents for QA engineers
+- `getLlm()` is identical code in all three services (can be extracted to a shared utility later)
