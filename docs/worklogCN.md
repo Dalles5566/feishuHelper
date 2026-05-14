@@ -264,3 +264,27 @@
 - `index.ts` 是程序入口（相当于 Java 的 main），负责启动所有服务（数据库、队列、HTTP 服务器）
 - `app.ts` 和 `index.ts` 分开是为了测试方便——测试时只用 `buildApp()` 不启动真正的服务器
 - notification 服务的 `formatNotificationMessage` 是 `sendNotification` 内部调用的，外部只需要调 `sendNotification` 传类型和参数
+
+### 今日完成内容（续）
+
+- 完成 Task 14.2：集成所有模块完成完整工作流（451 个测试全部通过）
+  - 创建 `src/integration/messageHandler.ts`：连接 EventDispatcher → AgentCore → NotificationService
+  - 注册 `im.message.receive_v1` handler：解析消息 → 调 AgentCore → 发回复通知
+  - 注册 `card.action.trigger` handler：处理卡片按钮点击
+  - 更新 `src/app.ts`：初始化 AgentCore + NotificationService，调用 registerMessageHandler 串联
+  - 创建 `src/integration/messageHandler.test.ts`：10 个单元测试
+- 配置运行环境：
+  - 启动 PostgreSQL Docker 容器
+  - 创建 feishu_helper 数据库并执行迁移脚本（7 张表 + 索引）
+  - 确认 Redis 正在运行（端口 6379）
+
+### 今日学习笔记（续）
+
+- 理解了 .env 配置文件各项含义：
+  - 飞书配置：APP_ID/SECRET（换 token 用）、VERIFICATION_TOKEN（验签用）、ENCRYPT_KEY（签名用）
+  - LLM 配置：PROVIDER（openai/anthropic）、API_KEY（花钱调 AI）、MODEL（用哪个模型）
+  - 数据库配置：HOST/PORT/NAME/USER/PASSWORD（连接 PostgreSQL）
+  - Redis 配置：HOST/PORT/PASSWORD（BullMQ 队列 + token 缓存）
+  - 应用配置：PORT（监听端口）、NODE_ENV（环境）、LOG_LEVEL（日志级别）
+- 理解了 14.2 集成的核心：messageHandler 把 dispatcher、agentCore、notificationService 三者串联起来
+- MVP 选择直接调用 AgentCore（不走队列），以后需要时改一行代码就能切换到队列模式

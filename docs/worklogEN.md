@@ -264,3 +264,27 @@
 - `index.ts` is the program entry point (like Java's main) — starts all services (DB, queues, HTTP server)
 - `app.ts` and `index.ts` are separate for testability — tests use `buildApp()` without starting a real server
 - notification service's `formatNotificationMessage` is called internally by `sendNotification`; external callers just call `sendNotification` with type and params
+
+### What was done today (continued)
+
+- Completed Task 14.2: Integrate all modules into complete workflow (all 451 tests passing)
+  - Created `src/integration/messageHandler.ts`: connects EventDispatcher → AgentCore → NotificationService
+  - Registers `im.message.receive_v1` handler: parse message → call AgentCore → send reply notification
+  - Registers `card.action.trigger` handler: handle card button clicks
+  - Updated `src/app.ts`: initializes AgentCore + NotificationService, calls registerMessageHandler to wire everything
+  - Created `src/integration/messageHandler.test.ts`: 10 unit tests
+- Configured runtime environment:
+  - Started PostgreSQL Docker container
+  - Created feishu_helper database and ran migration script (7 tables + indexes)
+  - Confirmed Redis is running (port 6379)
+
+### Learning Notes (continued)
+
+- Understood .env configuration file contents:
+  - Feishu config: APP_ID/SECRET (for token exchange), VERIFICATION_TOKEN (for signature verification), ENCRYPT_KEY (for signing)
+  - LLM config: PROVIDER (openai/anthropic), API_KEY (paid AI calls), MODEL (which model to use)
+  - Database config: HOST/PORT/NAME/USER/PASSWORD (PostgreSQL connection)
+  - Redis config: HOST/PORT/PASSWORD (BullMQ queues + token cache)
+  - App config: PORT (listen port), NODE_ENV (environment), LOG_LEVEL (logging level)
+- Understood Task 14.2 integration core: messageHandler wires dispatcher, agentCore, and notificationService together
+- MVP uses direct AgentCore calls (no queue); can switch to queue mode by changing one line later

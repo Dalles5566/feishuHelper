@@ -37,6 +37,7 @@ describe('buildApp', () => {
         verificationToken: 'test-verification-token',
         encryptKey: '',
       },
+      skipServices: true,
     });
   });
 
@@ -106,13 +107,13 @@ describe('buildApp', () => {
       const handler = vi.fn().mockResolvedValue(undefined);
       dispatcher.register('im.message.receive_v1', handler);
 
-      // Rebuild app with custom dispatcher and no encrypt key (skip signature check)
       const customApp = await buildApp({
         dispatcher,
         webhookConfig: {
           verificationToken: 'test-verification-token',
           encryptKey: '',
         },
+        skipServices: true,
       });
 
       const response = await customApp.inject({
@@ -162,6 +163,7 @@ describe('buildApp', () => {
           verificationToken: 'test-verification-token',
           encryptKey: '',
         },
+        skipServices: true,
       });
 
       expect(customApp).toBeDefined();
