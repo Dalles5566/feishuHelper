@@ -240,3 +240,27 @@
   - **Entry queue**: webhook drops messages here, Worker picks up and calls AgentCore
   - **Fire and forget**: drop into queue and move on, no need to wait for results
   - **Fast operations don't need queues**: QA Feedback, Task Assignment take milliseconds, do them synchronously
+
+---
+
+## 2026-05-14 (Thursday)
+
+### What was done today
+
+- Completed Task 13.2: Implement notification service (all 436 tests passing)
+  - Created `src/services/notification.ts`: sends messages via Feishu MCP
+  - Supports 4 notification types: task_assigned, state_changed, requirement_updated, verification_result
+  - Auto-requeues to notification queue on send failure
+  - Created `src/services/notification.test.ts`: 22 unit tests
+- Completed Task 14.1: Implement application entry point (all 441 tests passing)
+  - Created `src/app.ts`: Fastify app config with health check `/health` + webhook routes
+  - Updated `src/index.ts`: program entry point — initializes DB → queues → starts server → graceful shutdown
+  - Created `src/app.test.ts`: 5 unit tests
+
+### Learning Notes
+
+- Fastify is an HTTP server framework (like Java's Spring Boot) — makes code listen for HTTP requests
+- `app.get('/health', handler)` is Fastify's version of `@GetMapping("/health")`
+- `index.ts` is the program entry point (like Java's main) — starts all services (DB, queues, HTTP server)
+- `app.ts` and `index.ts` are separate for testability — tests use `buildApp()` without starting a real server
+- notification service's `formatNotificationMessage` is called internally by `sendNotification`; external callers just call `sendNotification` with type and params

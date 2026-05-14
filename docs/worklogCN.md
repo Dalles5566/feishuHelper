@@ -240,3 +240,27 @@
   - **入口队列**：webhook 丢消息进来，Worker 取出调 AgentCore
   - **fire and forget**：丢进队列就不管了，不需要等结果回传
   - **快操作不需要队列**：QA Feedback、Task Assignment 几毫秒搞定，直接同步做
+
+---
+
+## 2026-05-14（周四）
+
+### 今日完成内容
+
+- 完成 Task 13.2：实现通知服务（436 个测试全部通过）
+  - 创建 `src/services/notification.ts`：通过飞书 MCP 发消息通知
+  - 支持 4 种通知类型：任务分配、状态变更、需求变更、验证结果
+  - 发送失败时自动丢进 notification 队列重试
+  - 创建 `src/services/notification.test.ts`：22 个单元测试
+- 完成 Task 14.1：实现应用启动入口（441 个测试全部通过）
+  - 创建 `src/app.ts`：Fastify 应用配置，注册健康检查 `/health` + webhook 路由
+  - 更新 `src/index.ts`：程序入口，初始化数据库 → 队列 → 启动服务器 → 优雅关闭
+  - 创建 `src/app.test.ts`：5 个单元测试
+
+### 今日学习笔记
+
+- Fastify 就是 HTTP 服务器框架（相当于 Java 的 Spring Boot），让代码能监听 HTTP 请求
+- `app.get('/health', handler)` 就是 Fastify 版的 `@GetMapping("/health")`
+- `index.ts` 是程序入口（相当于 Java 的 main），负责启动所有服务（数据库、队列、HTTP 服务器）
+- `app.ts` 和 `index.ts` 分开是为了测试方便——测试时只用 `buildApp()` 不启动真正的服务器
+- notification 服务的 `formatNotificationMessage` 是 `sendNotification` 内部调用的，外部只需要调 `sendNotification` 传类型和参数
