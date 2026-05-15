@@ -1,7 +1,7 @@
 /**
  * Task Manager service.
  *
- * Provides CRUD operations for tasks, including creation via Feishu MCP,
+ * Provides CRUD operations for tasks, including creation via Feishu REST API,
  * task splitting into subtasks, description updates with history preservation,
  * and state transitions via the workflow state machine.
  *
@@ -11,11 +11,13 @@
 import type { Task, SubTask, TaskCreateParams, SubTaskParams, TaskFilter } from '../models/task.js';
 import type { TransitionContext } from '../models/workflow.js';
 import type { TaskState } from '../models/task.js';
-import { FeishuMcpService } from './feishuMcp.js';
+// @ts-ignore — node-sdk ships CJS
+import { Client } from '@larksuiteoapi/node-sdk';
 import { insert, query, queryOne, update } from '../utils/db.js';
 import { withRetry, type RetryOptions } from '../utils/retry.js';
 import { transition } from '../workflow/stateMachine.js';
 import { AppError, BusinessErrorCodes, ValidationErrorCodes } from '../utils/errors.js';
+import { getConfig } from '../config/index.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -23,8 +25,8 @@ import { AppError, BusinessErrorCodes, ValidationErrorCodes } from '../utils/err
 
 /** Options for creating a TaskManager instance. */
 export interface TaskManagerOptions {
-  /** Override the FeishuMcpService instance (useful for testing). */
-  feishuMcpService?: FeishuMcpService;
+  /** Override the Feishu Client instance (useful for testing). */
+  feishuClient?: InstanceType<typeof Client>;
   /** Override retry options for task creation. */
   retryOptions?: RetryOptions;
 }
@@ -65,11 +67,19 @@ interface TaskRow extends Record<string, unknown> {
  * description updates, and state transitions.
  */
 export class TaskManager {
-  private readonly feishuMcpService: FeishuMcpService;
+  private readonly feishuClient: InstanceType<typeof Client>;
   private readonly retryOptions: RetryOptions;
 
   constructor(options: TaskManagerOptions = {}) {
-    this.feishuMcpService = options.feishuMcpService ?? new FeishuMcpService();
+    if (options.feishuClient) {
+      this.feishuClient = options.feishuClient;
+    } else {
+      const config = getConfig();
+      this.feishuClient = new Client({
+        appId: config.feishu.appId,
+        appSecret: config.feishu.appSecret,
+      });
+    }
     this.retryOptions = options.retryOptions ?? {};
   }
 
@@ -90,32 +100,35 @@ export class TaskManager {
   async createTask(params: TaskCreateParams): Promise<Task> {
     this.validateCreateParams(params);
 
-    // Create task in Feishu via MCP with retry logic (up to 3 times)
+    // Create task in Feishu via REST API with retry logic (up to 3 times)
     const feishuTaskId = await withRetry(
       async () => {
-        const result = await this.feishuMcpService.callTool('task_create', {
-          title: params.title,
-          description: params.description,
-          priority: params.priority,
+        const response = await this.feishuClient.task.v2.task.create({
+          data: {
+            summary: params.title,
+            description: params.description,
+          },
         });
 
-        // Extract the Feishu task ID from the response
-        const content = result.content[0]?.text;
-        if (!content) {
+        if ((response as any)?.code !== 0) {
           throw AppError.feishuApi(
-            'FEISHU_TASK_CREATE_EMPTY_RESPONSE',
-            'Feishu task creation returned empty response',
-            { params },
+            'FEISHU_TASK_CREATE_FAILED',
+            `Feishu task creation failed: ${JSON.stringify(response)}`,
+            { params, response },
           );
         }
 
-        try {
-          const parsed = JSON.parse(content);
-          return parsed.task_id ?? parsed.id ?? content;
-        } catch {
-          // If not JSON, use the raw text as the ID
-          return content;
+        const taskGuid = (response as any)?.data?.task?.guid;
+        if (!taskGuid) {
+          throw AppError.feishuApi(
+            'FEISHU_TASK_CREATE_EMPTY_RESPONSE',
+            'Feishu task creation returned no task GUID',
+            { params, response },
+          );
         }
+
+        console.log(`[TaskManager] Feishu task created: ${taskGuid}`);
+        return taskGuid;
       },
       {
         ...this.retryOptions,

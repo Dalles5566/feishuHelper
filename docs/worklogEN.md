@@ -354,3 +354,19 @@
   - `@larksuiteoapi/node-sdk` Client is the correct way to call Feishu REST APIs from code
   - **Conclusion: for any Feishu operation (send messages, create tasks, update docs), use `node-sdk` Client, not MCP**
   - This means `FeishuMcpService` in our architecture only serves to provide tool descriptions to Claude; actual execution must go through REST API
+
+- Understood the difference between Feishu "AI Agent/智能体" and "Bot/机器人":
+  - AI Agent: Feishu's own AI intercepts messages, rewrites replies — messages don't reach your backend directly
+  - Bot: messages go directly to your backend, you fully control the reply content
+- Implemented Feishu task creation feature (AgentCore + Feishu REST API)
+  - **Problem**: AgentCore registered dozens of MCP tools for Claude, but none could actually execute (no callable handler). Claude repeatedly called them, failed, and gave up
+  - **Solution**: removed all MCP tools, registered only one working `create_feishu_task` tool that directly calls `node-sdk` Client
+  - **Critical bug**: `executeTool` method called tools with `tool.invoke({ params: args })`, but the new tool schema expected `args` directly. This caused the tool function to receive undefined parameters, making the Feishu API fail
+  - **Fix**: `tool.invoke({ params: args })` → `tool.invoke(args)`
+  - **ESM/CJS compatibility issue**: static `import { Client } from '@larksuiteoapi/node-sdk'` in ESM environment caused AgentCore initialization to silently fail (no error logs). Fixed by using `await import()` dynamic import inside `initialize()`
+  - **Session context pollution**: Claude sees previous failure records and refuses to retry tool calls. Fixed by using per-message independent sessions (`sessionId = message_id`)
+  - **Final architecture**: user message → AgentCore → Claude decides to call `create_feishu_task` → tool function calls `node-sdk` Client → Feishu REST API creates task → returns task URL → Claude replies to user
+- Updated taskManager.ts: switched from MCP to REST API
+  - Removed `FeishuMcpService` dependency, replaced with `@larksuiteoapi/node-sdk` Client
+  - `createTask()` now calls `client.task.v2.task.create()` instead of `mcpService.callTool('task_create', ...)`
+  - Note: agentCore's tool currently calls Client directly (bypassing taskManager); needs to be wired back through taskManager later for DB persistence and state management

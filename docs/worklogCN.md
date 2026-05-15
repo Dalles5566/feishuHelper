@@ -350,3 +350,19 @@
   - `@larksuiteoapi/node-sdk` 的 Client 才是给代码直接调用的 REST API 封装
   - **结论：凡是需要操作飞书的地方（发消息、创建任务、更新文档等），都用 `node-sdk` 的 Client，不用 MCP**
   - 这意味着 `FeishuMcpService` 在当前架构下只用于给 Claude 提供工具列表（描述信息），实际执行要走 REST API
+
+- 理解了飞书"智能体"和"机器人"的区别：
+  - 智能体：飞书自己的 AI 在中间拦截消息，改写回复，消息不直接到你的后端
+  - 机器人：消息直接到你的后端，你完全控制回复内容
+- 实现飞书任务创建功能（AgentCore + 飞书 REST API）
+  - **问题**：AgentCore 注册了几十个 MCP 工具给 Claude，但这些工具都不能执行（no callable handler），Claude 反复调用失败后放弃
+  - **解决方案**：删掉所有 MCP 工具，只注册一个真正能执行的 `create_feishu_task` 工具，内部直接调 `node-sdk` Client
+  - **关键 bug**：`executeTool` 方法调用工具时用了 `tool.invoke({ params: args })`，但新工具的 schema 期望直接传 `args`。这导致工具函数收到的参数全是 undefined，飞书 API 报错
+  - **修复**：`tool.invoke({ params: args })` → `tool.invoke(args)`
+  - **ESM/CJS 兼容问题**：静态 `import { Client } from '@larksuiteoapi/node-sdk'` 在 ESM 环境下会导致 AgentCore 初始化失败（静默失败，没有错误日志）。改为在 `initialize()` 里用 `await import()` 动态导入解决
+  - **session 上下文污染**：Claude 看到之前的失败记录后会拒绝再次尝试工具调用。改为每条消息用独立 session（`sessionId = message_id`）解决
+  - **最终架构**：用户消息 → AgentCore → Claude 决定调用 `create_feishu_task` → 工具函数调 `node-sdk` Client → 飞书 REST API 创建任务 → 返回任务 URL → Claude 回复用户
+- 更新 taskManager.ts：从 MCP 切换到 REST API
+  - 删掉 `FeishuMcpService` 依赖，改用 `@larksuiteoapi/node-sdk` Client
+  - `createTask()` 内部调 `client.task.v2.task.create()` 替代 `mcpService.callTool('task_create', ...)`
+  - 注意：当前 agentCore 的工具暂时直接调 Client（跳过 taskManager），后续需要改回调 taskManager 以串联数据库和状态管理

@@ -80,12 +80,25 @@ export interface AgentCoreOptions {
 // Constants
 // ---------------------------------------------------------------------------
 
-const DEFAULT_SYSTEM_PROMPT = `You are Feishu Helper, an AI assistant that helps manage development workflows.
-You can analyze meeting minutes, create and manage tasks, verify code implementations, and generate documentation.
-When users provide meeting content, analyze it and extract action items.
-When asked to create tasks, use the available Feishu tools to create them.
-Always respond in a clear, structured manner. Provide actionable suggestions.
-If you need to perform operations on Feishu, use the available tools.`;
+const DEFAULT_SYSTEM_PROMPT = `You are Feishu Helper, an AI assistant that automates development workflows via Feishu.
+
+Your core capabilities:
+1. **Analyze meeting minutes**: When a user sends meeting content, extract action items (tasks), decisions, and key discussion points.
+2. **Create tasks**: When you identify action items or the user asks you to create a task, use the create_feishu_task tool to create it in Feishu.
+3. **Reply in Chinese** unless the user writes in English.
+
+When you receive meeting minutes or a request to create a task:
+- Extract: title, description, assignee name, priority (high/medium/low), due date if mentioned
+- Call the create_feishu_task tool with the extracted information
+- Confirm to the user what was created
+
+When creating tasks, always include:
+- A clear, concise title
+- A description with context from the meeting
+- The assignee name if mentioned
+- **IMPORTANT: Always include the task URL link in your reply exactly as returned by the tool. Never omit or paraphrase the URL.**
+
+If the user just chats casually, respond naturally without creating tasks.`;
 
 const DEFAULT_MAX_CONTEXT_MESSAGES = 50;
 const MAX_TOOL_ITERATIONS = 10;
@@ -140,7 +153,15 @@ export class AgentCore {
    */
   async initialize(): Promise<void> {
     await this.initializeLlm();
-    this.registerFeishuTools();
+    // Dynamic import for CJS compatibility
+    const { Client } = await import('@larksuiteoapi/node-sdk');
+    const config = getConfig();
+    const feishuClient = new Client({
+      appId: config.feishu.appId,
+      appSecret: config.feishu.appSecret,
+    });
+    this.registerFeishuTools(feishuClient);
+    console.log(`[AgentCore] Initialized with ${this.tools.length} tools: ${this.tools.map(t => t.name).join(', ')}`);
   }
 
   /**
@@ -150,6 +171,7 @@ export class AgentCore {
    * which are executed and fed back until the LLM produces a final response.
    */
   async processInput(input: AgentInput): Promise<AgentOutput> {
+    console.log(`[AgentCore] processInput called — session: ${input.sessionId}, content: "${input.content.slice(0, 50)}"`);
     const llm = await this.getLlm();
     const context = this.getContext(input.sessionId);
 
@@ -175,7 +197,9 @@ export class AgentCore {
     while (iterations < MAX_TOOL_ITERATIONS) {
       iterations++;
 
+      console.log(`[AgentCore] Calling LLM (iteration ${iterations})...`);
       const aiMessage = await this.invokeLlm(llmWithTools, currentMessages);
+      console.log(`[AgentCore] LLM responded, tool_calls: ${aiMessage.tool_calls?.length ?? 0}`);
       currentMessages.push(aiMessage);
 
       // Check if the AI wants to call tools
@@ -220,6 +244,8 @@ export class AgentCore {
 
     // Trim context if it exceeds the limit
     this.trimContext(context);
+
+    console.log(`[AgentCore] Done — actions: ${actions.length}, response: "${finalResponse?.slice(0, 80) ?? 'none'}"`);
 
     return {
       actions,
@@ -352,35 +378,57 @@ export class AgentCore {
   /**
    * Register Feishu MCP tools as LangChain tools for the Agent.
    */
-  private registerFeishuTools(): void {
-    const mcpTools = this.mcpService.getAvailableTools();
-
-    this.tools = mcpTools.map((mcpTool) => {
-      // Sanitize tool name: Anthropic only allows [a-zA-Z0-9_-]
-      // MCP tools use dots (e.g. "bitable.v1.app.create") which are invalid
-      const sanitizedName = mcpTool.name.replace(/[^a-zA-Z0-9_-]/g, '_');
-
-      return new DynamicStructuredTool({
-        name: sanitizedName,
-        description: mcpTool.description || `Feishu MCP tool: ${mcpTool.name}`,
+  private registerFeishuTools(feishuClient: any): void {
+    this.tools = [
+      new DynamicStructuredTool({
+        name: 'create_feishu_task',
+        description: 'Create a task in Feishu. Use this when the user asks to create a task or when you extract action items from meeting minutes.',
         schema: z.object({
-          params: z.record(z.unknown()).describe('Parameters for the MCP tool call'),
+          summary: z.string().describe('Task title/summary'),
+          description: z.string().optional().describe('Task description with context'),
+          due_date: z.string().optional().describe('Due date in YYYY-MM-DD format, e.g. 2026-05-25. Leave empty if no due date.'),
         }),
-        func: async ({ params }) => {
+        func: async ({ summary, description, due_date }) => {
           try {
-            // Use the original MCP tool name for the actual call
-            const result = await this.mcpService.callTool(
-              mcpTool.name,
-              (params ?? {}) as Record<string, unknown>,
-            );
-            return result.content.map((c) => c.text).join('\n');
+            console.log(`[AgentCore] Creating task: "${summary}", due: ${due_date || 'none'}`);
+
+            const taskData: Record<string, unknown> = {
+              summary,
+              description: description || '',
+              members: [{
+                type: 'user',
+                id: 'ou_371598589222259055562993853b8df0',
+                role: 'assignee',
+              }],
+            };
+
+            // Add due date if provided
+            if (due_date) {
+              const timestamp = new Date(due_date + 'T18:00:00+08:00').getTime();
+              taskData.due = { timestamp: String(timestamp), is_all_day: false };
+            }
+
+            const response = await feishuClient.task.v2.task.create({
+              params: { user_id_type: 'open_id' },
+              data: taskData,
+            });
+
+            if ((response as any)?.code === 0) {
+              const task = (response as any)?.data?.task;
+              console.log(`[AgentCore] Task created successfully: ${task?.guid}`);
+              return `✅ 任务创建成功！\n标题: ${summary}\n链接: ${task?.url || 'N/A'}`;
+            } else {
+              console.error(`[AgentCore] Task API error:`, JSON.stringify(response));
+              return `❌ 任务创建失败: code=${(response as any)?.code}, msg=${(response as any)?.msg}`;
+            }
           } catch (err) {
-            const error = AppError.from(err);
-            return `Error: ${error.message}`;
+            const msg = err instanceof Error ? err.message : String(err);
+            console.error(`[AgentCore] Task creation exception:`, msg);
+            return `❌ 任务创建失败: ${msg}`;
           }
         },
-      });
-    });
+      }),
+    ];
   }
 
   /**
@@ -433,7 +481,7 @@ export class AgentCore {
       // Check if it's a registered LangChain tool
       const tool = this.tools.find((t) => t.name === toolName);
       if (tool) {
-        const result = await tool.invoke({ params: args });
+        const result = await tool.invoke(args);
         return typeof result === 'string' ? result : JSON.stringify(result);
       }
 
