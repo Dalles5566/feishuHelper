@@ -254,7 +254,34 @@
 
 ---
 
-## 2026-05-14（周四）
+## 2026-05-15（周五）
+
+### 今日完成内容
+
+- 修复 `npm run dev` 无法读取 `.env` 文件的问题
+  - 原因：`tsx` 不自动加载 `.env`，需要显式传入
+  - 修复：在 `package.json` 的 `dev` 和 `start` 脚本中加入 `--env-file=.env` 参数
+- 修复 `@larksuiteoapi/lark-mcp` 启动时打印 CLI 帮助信息的问题
+  - 原因：`index.js` 导出了 `cli.js`，后者在被 import 时自动执行 Commander 程序
+  - 修复：改为从子路径 `@larksuiteoapi/lark-mcp/dist/mcp-tool/index.js` 直接导入 `LarkMcpTool`，绕过 CLI 入口
+- 成功启动服务：DB、Redis、LarkMCP 全部连接正常，`/health` 端点返回 200
+- 新增 WebSocket 长连接模式（`src/gateway/wsGateway.ts`）
+  - 原因：飞书开放平台已配置为"长连接"订阅方式，不需要公网 Webhook URL
+  - 使用 `@larksuiteoapi/node-sdk` 的 `WSClient` 主动连接飞书，无需 ngrok/cloudflared
+  - `WsGateway` 收到事件后桥接到原有 `EventDispatcher`，其余模块无需改动
+  - 更新 `src/index.ts`：启动时初始化 `WsGateway` 并建立长连接
+- 验证长连接成功：日志显示 `[WsGateway] WebSocket connection established` 和 `ws client ready`
+- 飞书消息已成功到达服务（收到 `im.message.receive_v1` 事件），发现事件结构与预期不符，待下次修复
+
+### 今日学习笔记
+
+- 理解了 Webhook 模式 vs 长连接模式的区别：
+  - Webhook：飞书主动 POST 到你的服务，需要公网地址
+  - 长连接：你的服务主动连飞书 WebSocket，飞书通过这条连接推事件，不需要公网地址
+  - 开发阶段用长连接更方便，生产环境两种都可以
+- 理解了 `--env-file` 是 Node.js 18+ 内置功能，不需要 `dotenv` 包
+
+
 
 ### 今日完成内容
 

@@ -271,7 +271,7 @@
     - 测试异常流程：API 失败重试、状态回退
     - _Requirements: 9.1-9.6_
 
-- [ ] 15. Final Checkpoint - 确保所有测试通过
+- [x] 15. Final Checkpoint - 确保所有测试通过
   - 确保所有测试通过，如有问题请向用户确认。
 
 ## Notes

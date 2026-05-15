@@ -8,7 +8,7 @@
  * Requirements: 10.1, 10.2, 10.5
  */
 
-import { LarkMcpTool } from '@larksuiteoapi/lark-mcp';
+import { LarkMcpTool } from '@larksuiteoapi/lark-mcp/dist/mcp-tool/index.js';
 import type { McpTool, LarkMcpToolOptions } from '@larksuiteoapi/lark-mcp';
 import { getConfig } from '../config/index.js';
 import { AppError, FeishuErrorCodes } from '../utils/errors.js';
