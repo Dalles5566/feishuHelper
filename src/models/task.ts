@@ -63,8 +63,6 @@ export interface Task {
   assignee?: string;
   /** Present when this task is a subtask of another task. */
   parentTaskId?: string;
-  /** ID of the meeting that originated this task (deprecated, use task_meetings table). */
-  meetingId?: string;
   /** ID of the action item in the meeting analysis that produced this task. */
   sourceActionItemId: string;
   /** Feishu platform task ID (set after the task is created in Feishu). */
@@ -138,7 +136,6 @@ export interface SubTaskParams {
 export interface TaskFilter {
   state?: TaskState;
   assignee?: string;
-  meetingId?: string;
   priority?: 'high' | 'medium' | 'low';
   parentTaskId?: string;
 }

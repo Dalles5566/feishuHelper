@@ -538,7 +538,6 @@ export class TaskManager {
       state: row.state as TaskState,
       assignee: row.assignee_id ?? undefined,
       parentTaskId: row.parent_task_id ?? undefined,
-      meetingId: '',
       sourceActionItemId: row.source_action_item_id,
       feishuTaskId: row.feishu_task_id ?? undefined,
       retryCount: row.retry_count,
