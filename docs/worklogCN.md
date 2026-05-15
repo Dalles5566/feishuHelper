@@ -314,6 +314,9 @@
   - **user_id 为 null**：飞书返回的 `user_id` 是 null，需要改用 `open_id` 作为用户标识
   - 修复 `src/integration/messageHandler.ts`：从 `event.event.sender` 读取，优先用 `open_id`
   - 修复 `src/gateway/wsGateway.ts` 的 `bridgeEvent`：正确拆分 SDK 传来的扁平数据为 header + event payload
+- 修复 Claude API 拒绝飞书 MCP 工具名的问题
+  - 原因：飞书 MCP 工具名含 `.`（如 `bitable.v1.app.create`），但 Claude API 只接受 `[a-zA-Z0-9_-]`
+  - 修复：在 `src/agent/agentCore.ts` 注册工具时把 `.` 替换为 `_`（如 `bitable_v1_app_create`），调飞书 MCP 时仍用原始名字
 
 ### 今日学习笔记
 

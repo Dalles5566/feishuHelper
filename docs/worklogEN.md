@@ -318,6 +318,9 @@
   - **user_id is null**: Feishu returns `user_id` as null, need to use `open_id` as user identifier instead
   - Fixed `src/integration/messageHandler.ts`: read from `event.event.sender`, prefer `open_id`
   - Fixed `src/gateway/wsGateway.ts` `bridgeEvent`: correctly split SDK's flat data into header + event payload
+- Fixed Claude API rejecting Feishu MCP tool names
+  - Root cause: Feishu MCP tool names contain `.` (e.g. `bitable.v1.app.create`), but Claude API only accepts `[a-zA-Z0-9_-]`
+  - Fix: sanitize tool names in `src/agent/agentCore.ts` by replacing `.` with `_` (e.g. `bitable_v1_app_create`) when registering with LLM; still use original names when calling Feishu MCP
 
 ### Learning Notes
 

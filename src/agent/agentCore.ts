@@ -356,17 +356,19 @@ export class AgentCore {
     const mcpTools = this.mcpService.getAvailableTools();
 
     this.tools = mcpTools.map((mcpTool) => {
-      // Build a Zod schema from the MCP tool's JSON schema
-      // For MCP tools, we use a generic params schema since the actual
-      // schema varies per tool and is validated by the MCP server
+      // Sanitize tool name: Anthropic only allows [a-zA-Z0-9_-]
+      // MCP tools use dots (e.g. "bitable.v1.app.create") which are invalid
+      const sanitizedName = mcpTool.name.replace(/[^a-zA-Z0-9_-]/g, '_');
+
       return new DynamicStructuredTool({
-        name: mcpTool.name,
+        name: sanitizedName,
         description: mcpTool.description || `Feishu MCP tool: ${mcpTool.name}`,
         schema: z.object({
           params: z.record(z.unknown()).describe('Parameters for the MCP tool call'),
         }),
         func: async ({ params }) => {
           try {
+            // Use the original MCP tool name for the actual call
             const result = await this.mcpService.callTool(
               mcpTool.name,
               (params ?? {}) as Record<string, unknown>,
