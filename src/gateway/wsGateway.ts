@@ -62,6 +62,7 @@ export class WsGateway {
     // The SDK calls registered handlers with the decoded event data
     larkDispatcher.register({
       'im.message.receive_v1': async (data: RawLarkEvent) => {
+        console.log('[WsGateway] RAW im.message.receive_v1 data:', JSON.stringify(data, null, 2));
         await this.bridgeEvent('im.message.receive_v1', data);
       },
       'card.action.trigger': async (data: RawLarkEvent) => {
@@ -101,23 +102,33 @@ export class WsGateway {
   /**
    * Bridge a raw Lark SDK event into our internal EventDispatcher format.
    *
-   * The Lark SDK passes the decoded event.event payload directly to handlers,
-   * so we need to reconstruct the full FeishuEvent envelope our dispatcher expects.
+   * The Lark SDK flattens the event: it merges event.event fields directly
+   * into the top-level data object passed to handlers. So data already IS
+   * the event payload (message, sender, etc.) plus header fields.
+   *
+   * We reconstruct the FeishuEvent envelope our EventDispatcher expects:
+   *   { header: { event_type, ... }, event: { message, sender, action, ... } }
    */
   private async bridgeEvent(eventType: string, data: RawLarkEvent): Promise<void> {
     try {
-      // Reconstruct the FeishuEvent envelope our EventDispatcher expects
+      // The SDK merges event.event into the top-level data, so data contains
+      // both header fields and the actual event payload (message, sender, etc.)
+      const { header, ...eventPayload } = data;
+
       const feishuEvent = {
         schema: '2.0',
         header: {
-          event_id: data.header?.event_id ?? '',
+          event_id: (header as any)?.event_id ?? '',
           event_type: eventType,
-          create_time: data.header?.create_time ?? new Date().toISOString(),
-          token: data.header?.token ?? '',
-          app_id: data.header?.app_id ?? '',
+          create_time: (header as any)?.create_time ?? new Date().toISOString(),
+          token: (header as any)?.token ?? '',
+          app_id: (header as any)?.app_id ?? '',
         },
-        event: data as Record<string, unknown>,
+        // eventPayload contains: message, sender, action, etc.
+        event: eventPayload,
       };
+
+      console.log(`[WsGateway] Received event: ${eventType}`, JSON.stringify(feishuEvent.event, null, 2));
 
       await this.dispatcher.dispatch(feishuEvent as any);
     } catch (err) {

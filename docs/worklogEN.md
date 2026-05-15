@@ -271,7 +271,11 @@
   - `WsGateway` bridges received events into the existing `EventDispatcher`; all other modules unchanged
   - Updated `src/index.ts` to initialize `WsGateway` and start the connection on startup
 - Verified long connection works: logs show `[WsGateway] WebSocket connection established` and `ws client ready`
-- Feishu message successfully reached the service (`im.message.receive_v1` event received); event structure mismatch found, to be fixed next session
+- Feishu message successfully reached the service (`im.message.receive_v1` event received); found two data structure mismatches and fixed:
+  - **sender location wrong**: code assumed sender was inside message (`event.event.message.sender`), but Feishu actually sends sender as a sibling of message (`event.event.sender`)
+  - **user_id is null**: Feishu returns `user_id` as null, need to use `open_id` as user identifier instead
+  - Fixed `src/integration/messageHandler.ts`: read from `event.event.sender`, prefer `open_id`
+  - Fixed `src/gateway/wsGateway.ts` `bridgeEvent`: correctly split SDK's flat data into header + event payload
 
 ### Learning Notes
 

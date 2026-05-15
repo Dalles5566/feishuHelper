@@ -271,7 +271,11 @@
   - `WsGateway` 收到事件后桥接到原有 `EventDispatcher`，其余模块无需改动
   - 更新 `src/index.ts`：启动时初始化 `WsGateway` 并建立长连接
 - 验证长连接成功：日志显示 `[WsGateway] WebSocket connection established` 和 `ws client ready`
-- 飞书消息已成功到达服务（收到 `im.message.receive_v1` 事件），发现事件结构与预期不符，待下次修复
+- 飞书消息已成功到达服务（收到 `im.message.receive_v1` 事件），发现两个数据结构不匹配问题并修复：
+  - **sender 位置错误**：代码假设 sender 在 message 内部（`event.event.message.sender`），实际飞书传的是 sender 和 message 平级（`event.event.sender`）
+  - **user_id 为 null**：飞书返回的 `user_id` 是 null，需要改用 `open_id` 作为用户标识
+  - 修复 `src/integration/messageHandler.ts`：从 `event.event.sender` 读取，优先用 `open_id`
+  - 修复 `src/gateway/wsGateway.ts` 的 `bridgeEvent`：正确拆分 SDK 传来的扁平数据为 header + event payload
 
 ### 今日学习笔记
 

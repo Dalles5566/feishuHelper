@@ -77,7 +77,9 @@ async function handleMessageEvent(
     return;
   }
 
-  const userId = message.sender.sender_id.user_id;
+  // sender is a sibling of message in the event payload, not nested inside message
+  const sender = (event.event as any).sender;
+  const userId = sender?.sender_id?.open_id ?? sender?.sender_id?.user_id ?? 'unknown';
   const chatId = message.chat_id;
 
   // Parse message content (Feishu sends JSON-encoded content)

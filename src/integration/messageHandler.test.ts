@@ -62,6 +62,13 @@ function createMessageEvent(overrides?: Partial<FeishuEvent>): FeishuEvent {
           },
         },
       },
+      sender: {
+        sender_id: {
+          user_id: 'user-001',
+          open_id: 'open-001',
+        },
+        sender_type: 'user',
+      },
     },
     ...overrides,
   };
@@ -121,7 +128,7 @@ describe('registerMessageHandler', () => {
       expect(agentCore.processInput).toHaveBeenCalledOnce();
       const input = (agentCore.processInput as ReturnType<typeof vi.fn>).mock.calls[0][0] as AgentInput;
       expect(input.sessionId).toBe('chat-001');
-      expect(input.userId).toBe('user-001');
+      expect(input.userId).toBe('open-001');
       expect(input.messageType).toBe('text');
       expect(input.content).toBe('Hello, analyze this meeting');
       expect(input.metadata).toEqual({
@@ -139,7 +146,7 @@ describe('registerMessageHandler', () => {
 
       expect(notificationService.sendNotification).toHaveBeenCalledOnce();
       const params = (notificationService.sendNotification as ReturnType<typeof vi.fn>).mock.calls[0][0] as SendNotificationParams;
-      expect(params.recipientId).toBe('user-001');
+      expect(params.recipientId).toBe('open-001');
       expect(params.chatId).toBe('chat-001');
       expect(params.content).toBe('Agent response');
     });
