@@ -115,7 +115,7 @@ export interface TaskCreateParams {
   dependencies: string[];
   priority: 'high' | 'medium' | 'low';
   sourceActionItemId: string;
-  meetingId: string;
+  meetingId?: string;
 }
 
 /**

@@ -417,38 +417,27 @@ export class AgentCore {
           try {
             console.log(`[AgentCore] Creating task: "${summary}", due: ${due_date || 'none'}`);
 
-            const taskData: Record<string, unknown> = {
-              summary,
+            // Use TaskManager for full flow (Feishu API + DB persistence)
+            const { TaskManager } = await import('../services/taskManager.js');
+            const taskManager = new TaskManager({ feishuClient });
+
+            const task = await taskManager.createTask({
+              title: summary,
               description: description || '',
-              members: [{
-                type: 'user',
-                id: 'ou_371598589222259055562993853b8df0',
-                role: 'assignee',
-              }],
-            };
-
-            // Add due date if provided
-            if (due_date) {
-              const timestamp = new Date(due_date + 'T18:00:00+08:00').getTime();
-              taskData.due = { timestamp: String(timestamp), is_all_day: false };
-            }
-
-            const response = await feishuClient.task.v2.task.create({
-              params: { user_id_type: 'open_id' },
-              data: taskData,
+              acceptanceCriteria: [],
+              dependencies: [],
+              priority: 'medium',
+              sourceActionItemId: `agent-${Date.now()}`,
             });
 
-            if ((response as any)?.code === 0) {
-              const task = (response as any)?.data?.task;
-              console.log(`[AgentCore] Task created successfully: ${task?.guid}`);
-              return `✅ 任务创建成功！\n标题: ${summary}\n链接: ${task?.url || 'N/A'}`;
-            } else {
-              console.error(`[AgentCore] Task API error:`, JSON.stringify(response));
-              return `❌ 任务创建失败: code=${(response as any)?.code}, msg=${(response as any)?.msg}`;
-            }
+            console.log(`[AgentCore] Task created and saved to DB: ${task.id}, feishu: ${task.feishuTaskId}`);
+
+            // Get the task URL from Feishu (construct it from the GUID)
+            const taskUrl = `https://applink.feishu.cn/client/todo/detail?guid=${task.feishuTaskId}`;
+            return `✅ 任务创建成功！\n标题: ${summary}\n链接: ${taskUrl}`;
           } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
-            console.error(`[AgentCore] Task creation exception:`, msg);
+            console.error(`[AgentCore] Task creation failed:`, msg);
             return `❌ 任务创建失败: ${msg}`;
           }
         },

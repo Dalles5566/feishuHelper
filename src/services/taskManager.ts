@@ -104,9 +104,15 @@ export class TaskManager {
     const feishuTaskId = await withRetry(
       async () => {
         const response = await this.feishuClient.task.v2.task.create({
+          params: { user_id_type: 'open_id' },
           data: {
             summary: params.title,
             description: params.description,
+            members: [{
+              type: 'user',
+              id: 'ou_371598589222259055562993853b8df0',
+              role: 'assignee',
+            }],
           },
         });
 
@@ -463,15 +469,6 @@ export class TaskManager {
         'Task description is required',
         { params },
         'Provide a non-empty description.',
-      );
-    }
-
-    if (!params.meetingId || params.meetingId.trim() === '') {
-      throw AppError.validation(
-        ValidationErrorCodes.MISSING_FIELD,
-        'Meeting ID is required',
-        { params },
-        'Provide the meeting ID that originated this task.',
       );
     }
 

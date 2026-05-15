@@ -372,3 +372,10 @@
   - system prompt 明确要求：收到会议内容时**必须先调 analyze_meeting**，拿到结构化行动项后再逐个调 create_feishu_task
   - 这样 meetingAnalyzer 的能力（Zod schema 强制输出格式、长内容分段处理）都能被利用
   - 如果用户直接说"创建任务：xxx"，LLM 判断不是会议内容，跳过分析直接创建
+
+- 完成 AgentCore → TaskManager → 数据库 的完整链路
+  - AgentCore 的 `create_feishu_task` 工具改为调用 `taskManager.createTask()`
+  - TaskManager 先调飞书 REST API 创建任务，成功后存入本地 PostgreSQL
+  - 数据库 `tasks.meeting_id` 改为可选（允许 NULL），支持不关联会议直接创建任务
+  - 验证成功：飞书任务创建 + 数据库记录同时完成
+  - 待完善：发送会议纪要时应先创建 meeting 记录，再关联到 task

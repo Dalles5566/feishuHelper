@@ -376,3 +376,10 @@
   - System prompt explicitly requires: when receiving meeting content, **MUST call analyze_meeting first**, then call create_feishu_task for each action item
   - This leverages MeetingAnalyzer's capabilities (Zod schema forced output format, long content chunking)
   - If user directly says "create task: xxx", LLM determines it's not meeting content and skips analysis
+
+- Completed full pipeline: AgentCore → TaskManager → Database
+  - AgentCore's `create_feishu_task` tool now calls `taskManager.createTask()`
+  - TaskManager calls Feishu REST API first, then persists to local PostgreSQL on success
+  - Database `tasks.meeting_id` made nullable to support creating tasks without a meeting association
+  - Verified: Feishu task creation + database record both succeed
+  - TODO: when receiving meeting content, create a meeting record first, then associate tasks with it
