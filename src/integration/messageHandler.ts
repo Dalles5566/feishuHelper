@@ -15,6 +15,27 @@ import type { AgentCore, AgentInput } from '../agent/agentCore.js';
 import type { NotificationService } from '../services/notification.js';
 
 // ---------------------------------------------------------------------------
+// Message deduplication
+// ---------------------------------------------------------------------------
+
+/** Set of recently processed message IDs to prevent duplicate processing. */
+const processedMessageIds = new Set<string>();
+const MAX_DEDUP_SIZE = 500;
+
+function markProcessed(messageId: string): boolean {
+  if (processedMessageIds.has(messageId)) {
+    return false; // already processed
+  }
+  processedMessageIds.add(messageId);
+  // Prevent unbounded growth
+  if (processedMessageIds.size > MAX_DEDUP_SIZE) {
+    const first = processedMessageIds.values().next().value;
+    if (first) processedMessageIds.delete(first);
+  }
+  return true; // first time seeing this message
+}
+
+// ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
@@ -77,8 +98,24 @@ async function handleMessageEvent(
     return;
   }
 
-  // sender is a sibling of message in the event payload, not nested inside message
+  // Ignore messages sent by the bot itself to prevent infinite loops
   const sender = (event.event as any).sender;
+  if (sender?.sender_type === 'app') {
+    return;
+  }
+
+  // Ignore stale messages (older than 30 seconds) — Feishu retries from when server was offline
+  const messageCreateTime = parseInt(message.create_time || '0', 10);
+  const now = Date.now();
+  if (messageCreateTime > 0 && (now - messageCreateTime) > 30000) {
+    return;
+  }
+
+  // Deduplicate: ignore messages we've already processed
+  if (!markProcessed(message.message_id)) {
+    return;
+  }
+
   const userId = sender?.sender_id?.open_id ?? sender?.sender_id?.user_id ?? 'unknown';
   const chatId = message.chat_id;
 

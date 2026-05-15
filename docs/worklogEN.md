@@ -327,6 +327,17 @@
 - Created a new pure bot application (replacing the previous AI Agent/智能体)
   - AI Agent intercepts and rewrites replies; pure bot passes them through directly
   - After publishing and admin approval, full flow verified: messages sent and received correctly, Claude replies arrive unmodified in Feishu
+- Fixed message duplicate processing issue (Feishu pushing same message multiple times)
+  - **Symptom**: sending one message caused the backend to process it twice or enter an infinite loop
+  - **Root cause analysis**:
+    1. Bot's own replies also trigger `im.message.receive_v1` events (Feishu doesn't distinguish sender), causing a "receive → reply → receive reply → reply again" infinite loop
+    2. When WebSocket disconnects, Feishu queues undelivered messages and replays them all on reconnect (including very old messages)
+    3. Network jitter causes Feishu to push the same message twice (same `message_id`)
+  - **Solution**: three-layer protection in `messageHandler.ts`
+    1. `sender_type === 'app'` filter → ignore messages sent by the bot itself, breaking the infinite loop
+    2. `create_time` older than 30 seconds → discard stale messages from replay queue
+    3. `message_id` deduplication (in-memory Set, max 500 entries) → block same message pushed twice
+  - **Key insight**: all three layers are necessary — `message_id` dedup alone can't stop infinite loops (each new reply has a different ID), and `sender_type` filter alone can't stop duplicate pushes (same user message pushed twice)
 
 ### Learning Notes
 
