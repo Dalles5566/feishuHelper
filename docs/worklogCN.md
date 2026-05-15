@@ -243,49 +243,7 @@
 
 ---
 
-## 2026-05-15（周五）
-
-### 今日完成内容
-
-- 完成 Task 15 Final Checkpoint：全部 451 个测试通过，TypeScript 编译无错误
-- 项目 MVP 实现完毕，所有必需任务（1.1 ~ 14.2）全部完成
-- 剩余可选任务（Property-Based Tests、集成测试）标记为 `*`，可按需实现
-- 扫描项目现状：21 个测试文件，451 个测试，全部通过；构建无报错（仅 1 个未使用导入警告）
-
----
-
-## 2026-05-15（周五）
-
-### 今日完成内容
-
-- 修复 `npm run dev` 无法读取 `.env` 文件的问题
-  - 原因：`tsx` 不自动加载 `.env`，需要显式传入
-  - 修复：在 `package.json` 的 `dev` 和 `start` 脚本中加入 `--env-file=.env` 参数
-- 修复 `@larksuiteoapi/lark-mcp` 启动时打印 CLI 帮助信息的问题
-  - 原因：`index.js` 导出了 `cli.js`，后者在被 import 时自动执行 Commander 程序
-  - 修复：改为从子路径 `@larksuiteoapi/lark-mcp/dist/mcp-tool/index.js` 直接导入 `LarkMcpTool`，绕过 CLI 入口
-- 成功启动服务：DB、Redis、LarkMCP 全部连接正常，`/health` 端点返回 200
-- 新增 WebSocket 长连接模式（`src/gateway/wsGateway.ts`）
-  - 原因：飞书开放平台已配置为"长连接"订阅方式，不需要公网 Webhook URL
-  - 使用 `@larksuiteoapi/node-sdk` 的 `WSClient` 主动连接飞书，无需 ngrok/cloudflared
-  - `WsGateway` 收到事件后桥接到原有 `EventDispatcher`，其余模块无需改动
-  - 更新 `src/index.ts`：启动时初始化 `WsGateway` 并建立长连接
-- 验证长连接成功：日志显示 `[WsGateway] WebSocket connection established` 和 `ws client ready`
-- 飞书消息已成功到达服务（收到 `im.message.receive_v1` 事件），发现两个数据结构不匹配问题并修复：
-  - **sender 位置错误**：代码假设 sender 在 message 内部（`event.event.message.sender`），实际飞书传的是 sender 和 message 平级（`event.event.sender`）
-  - **user_id 为 null**：飞书返回的 `user_id` 是 null，需要改用 `open_id` 作为用户标识
-  - 修复 `src/integration/messageHandler.ts`：从 `event.event.sender` 读取，优先用 `open_id`
-  - 修复 `src/gateway/wsGateway.ts` 的 `bridgeEvent`：正确拆分 SDK 传来的扁平数据为 header + event payload
-
-### 今日学习笔记
-
-- 理解了 Webhook 模式 vs 长连接模式的区别：
-  - Webhook：飞书主动 POST 到你的服务，需要公网地址
-  - 长连接：你的服务主动连飞书 WebSocket，飞书通过这条连接推事件，不需要公网地址
-  - 开发阶段用长连接更方便，生产环境两种都可以
-- 理解了 `--env-file` 是 Node.js 18+ 内置功能，不需要 `dotenv` 包
-
-
+## 2026-05-14（周四）
 
 ### 今日完成内容
 
@@ -330,3 +288,37 @@
   - 应用配置：PORT（监听端口）、NODE_ENV（环境）、LOG_LEVEL（日志级别）
 - 理解了 14.2 集成的核心：messageHandler 把 dispatcher、agentCore、notificationService 三者串联起来
 - MVP 选择直接调用 AgentCore（不走队列），以后需要时改一行代码就能切换到队列模式
+
+
+---
+
+## 2026-05-15（周五）
+
+### 今日完成内容
+
+- 修复 `npm run dev` 无法读取 `.env` 文件的问题
+  - 原因：`tsx` 不自动加载 `.env`，需要显式传入
+  - 修复：在 `package.json` 的 `dev` 和 `start` 脚本中加入 `--env-file=.env` 参数
+- 修复 `@larksuiteoapi/lark-mcp` 启动时打印 CLI 帮助信息的问题
+  - 原因：`index.js` 导出了 `cli.js`，后者在被 import 时自动执行 Commander 程序
+  - 修复：改为从子路径 `@larksuiteoapi/lark-mcp/dist/mcp-tool/index.js` 直接导入 `LarkMcpTool`，绕过 CLI 入口
+- 成功启动服务：DB、Redis、LarkMCP 全部连接正常，`/health` 端点返回 200
+- 新增 WebSocket 长连接模式（`src/gateway/wsGateway.ts`）
+  - 原因：飞书开放平台已配置为"长连接"订阅方式，不需要公网 Webhook URL
+  - 使用 `@larksuiteoapi/node-sdk` 的 `WSClient` 主动连接飞书，无需 ngrok/cloudflared
+  - `WsGateway` 收到事件后桥接到原有 `EventDispatcher`，其余模块无需改动
+  - 更新 `src/index.ts`：启动时初始化 `WsGateway` 并建立长连接
+- 验证长连接成功：日志显示 `[WsGateway] WebSocket connection established` 和 `ws client ready`
+- 飞书消息已成功到达服务（收到 `im.message.receive_v1` 事件），发现两个数据结构不匹配问题并修复：
+  - **sender 位置错误**：代码假设 sender 在 message 内部（`event.event.message.sender`），实际飞书传的是 sender 和 message 平级（`event.event.sender`）
+  - **user_id 为 null**：飞书返回的 `user_id` 是 null，需要改用 `open_id` 作为用户标识
+  - 修复 `src/integration/messageHandler.ts`：从 `event.event.sender` 读取，优先用 `open_id`
+  - 修复 `src/gateway/wsGateway.ts` 的 `bridgeEvent`：正确拆分 SDK 传来的扁平数据为 header + event payload
+
+### 今日学习笔记
+
+- 理解了 Webhook 模式 vs 长连接模式的区别：
+  - Webhook：飞书主动 POST 到你的服务，需要公网地址
+  - 长连接：你的服务主动连飞书 WebSocket，飞书通过这条连接推事件，不需要公网地址
+  - 开发阶段用长连接更方便，生产环境两种都可以
+- 理解了 `--env-file` 是 Node.js 18+ 内置功能，不需要 `dotenv` 包
