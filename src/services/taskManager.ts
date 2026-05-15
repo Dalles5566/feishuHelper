@@ -42,7 +42,6 @@ interface TaskRow extends Record<string, unknown> {
   state: string;
   assignee_id: string | null;
   parent_task_id: string | null;
-  meeting_id: string;
   source_action_item_id: string;
   feishu_task_id: string | null;
   retry_count: number;
@@ -149,9 +148,9 @@ export class TaskManager {
     const row = await insert<TaskRow>(
       `INSERT INTO tasks (
         title, description, acceptance_criteria, dependencies,
-        priority, state, meeting_id, source_action_item_id, feishu_task_id,
+        priority, state, source_action_item_id, feishu_task_id,
         retry_count, description_history
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       RETURNING *`,
       [
         params.title,
@@ -160,7 +159,6 @@ export class TaskManager {
         JSON.stringify(params.dependencies),
         params.priority,
         'Created',
-        params.meetingId,
         params.sourceActionItemId,
         feishuTaskId,
         0,
@@ -540,7 +538,7 @@ export class TaskManager {
       state: row.state as TaskState,
       assignee: row.assignee_id ?? undefined,
       parentTaskId: row.parent_task_id ?? undefined,
-      meetingId: row.meeting_id,
+      meetingId: '',
       sourceActionItemId: row.source_action_item_id,
       feishuTaskId: row.feishu_task_id ?? undefined,
       retryCount: row.retry_count,
