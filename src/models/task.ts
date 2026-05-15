@@ -144,6 +144,21 @@ export interface TaskFilter {
 }
 
 // ---------------------------------------------------------------------------
+// Task-Meeting Junction (many-to-many)
+// ---------------------------------------------------------------------------
+
+/**
+ * Records the relationship between a task and a meeting.
+ * A task can be discussed in multiple meetings, and a meeting can produce multiple tasks.
+ */
+export interface TaskMeeting {
+  id: string;
+  taskId: string;
+  meetingId: string;
+  createdAt: string;
+}
+
+// ---------------------------------------------------------------------------
 // Task Assignment
 // ---------------------------------------------------------------------------
 

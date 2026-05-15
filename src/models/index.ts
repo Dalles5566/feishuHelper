@@ -16,6 +16,7 @@ export type {
   SubTaskParams,
   TaskFilter,
   TaskAssignment,
+  TaskMeeting,
 } from './task.js';
 
 // Meeting models
