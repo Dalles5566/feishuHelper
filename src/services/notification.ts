@@ -1,5 +1,5 @@
 /**
- * Notification service for sending messages via Feishu MCP.
+ * Notification service for sending messages via Feishu REST API.
  *
  * Supports different notification types:
  *   - task_assigned: Notify a developer of a new task assignment
@@ -13,9 +13,12 @@
  * Requirements: 3.2, 9.6
  */
 
+// @ts-ignore — node-sdk ships CJS
+import { Client } from '@larksuiteoapi/node-sdk';
 import { FeishuMcpService } from './feishuMcp.js';
 import { AppError, FeishuErrorCodes } from '../utils/errors.js';
 import { addNotificationJob, type NotificationJobData } from '../queue/index.js';
+import { getConfig } from '../config/index.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -125,17 +128,24 @@ export function formatNotificationMessage(
 export class NotificationService {
   private readonly mcpService: FeishuMcpService;
   private readonly addJobFn: typeof addNotificationJob;
+  private readonly client: InstanceType<typeof Client>;
 
   constructor(options: NotificationServiceOptions = {}) {
     this.mcpService = options.mcpService ?? new FeishuMcpService();
     this.addJobFn = options.addJobFn ?? addNotificationJob;
+
+    const config = getConfig();
+    this.client = new Client({
+      appId: config.feishu.appId,
+      appSecret: config.feishu.appSecret,
+    });
   }
 
   /**
    * Send a notification to a Feishu user or chat.
    *
    * Formats the message based on type and metadata, then sends via
-   * Feishu MCP's im_send_message tool. On failure, re-queues the
+   * Feishu REST API (im.v1.message.create). On failure, re-queues the
    * notification for retry.
    */
   async sendNotification(params: SendNotificationParams): Promise<NotificationResult> {
@@ -145,27 +155,23 @@ export class NotificationService {
     const messageContent = formatNotificationMessage(type, metadata, content);
 
     try {
-      // Build the MCP tool call parameters
-      const mcpParams: Record<string, unknown> = {
-        receive_id_type: chatId ? 'chat_id' : 'user_id',
-        receive_id: chatId || recipientId,
-        msg_type: 'text',
-        content: JSON.stringify({ text: messageContent }),
-      };
+      console.log(`[NotificationService] Sending message to ${chatId || recipientId}`);
 
-      // Send via Feishu MCP
-      const result = await this.mcpService.callTool('im_send_message', mcpParams);
+      // Send via Feishu REST API directly
+      const response = await this.client.im.v1.message.create({
+        params: {
+          receive_id_type: chatId ? 'chat_id' : 'open_id',
+        },
+        data: {
+          receive_id: chatId || recipientId,
+          msg_type: 'text',
+          content: JSON.stringify({ text: messageContent }),
+        },
+      });
 
-      // Extract message ID from response if available
-      let messageId: string | undefined;
-      if (!result.isError && result.content.length > 0) {
-        try {
-          const responseData = JSON.parse(result.content[0].text);
-          messageId = responseData?.data?.message_id ?? responseData?.message_id;
-        } catch {
-          // Response parsing is best-effort
-        }
-      }
+      console.log(`[NotificationService] API response:`, JSON.stringify(response, null, 2));
+
+      const messageId = (response as any)?.data?.message_id;
 
       return {
         success: true,
@@ -174,6 +180,8 @@ export class NotificationService {
     } catch (error) {
       const errorMessage =
         error instanceof AppError ? error.message : String(error);
+
+      console.error(`[NotificationService] Send failed:`, errorMessage);
 
       // Re-queue the notification for retry
       const requeued = await this.requeueNotification(params, messageContent);

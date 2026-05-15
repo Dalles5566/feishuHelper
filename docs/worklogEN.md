@@ -321,6 +321,12 @@
 - Fixed Claude API rejecting Feishu MCP tool names
   - Root cause: Feishu MCP tool names contain `.` (e.g. `bitable.v1.app.create`), but Claude API only accepts `[a-zA-Z0-9_-]`
   - Fix: sanitize tool names in `src/agent/agentCore.ts` by replacing `.` with `_` (e.g. `bitable_v1_app_create`) when registering with LLM; still use original names when calling Feishu MCP
+- Fixed NotificationService failing to send messages
+  - Root cause: MCP tool `im.v1.message.create` has no callable handler — cannot be invoked directly in code
+  - Fix: switched to using `@larksuiteoapi/node-sdk` Client to call Feishu REST API directly for sending messages
+- Created a new pure bot application (replacing the previous AI Agent/智能体)
+  - AI Agent intercepts and rewrites replies; pure bot passes them through directly
+  - After publishing and admin approval, full flow verified: messages sent and received correctly, Claude replies arrive unmodified in Feishu
 
 ### Learning Notes
 

@@ -317,6 +317,12 @@
 - 修复 Claude API 拒绝飞书 MCP 工具名的问题
   - 原因：飞书 MCP 工具名含 `.`（如 `bitable.v1.app.create`），但 Claude API 只接受 `[a-zA-Z0-9_-]`
   - 修复：在 `src/agent/agentCore.ts` 注册工具时把 `.` 替换为 `_`（如 `bitable_v1_app_create`），调飞书 MCP 时仍用原始名字
+- 修复 NotificationService 发送消息失败的问题
+  - 原因：MCP 工具 `im.v1.message.create` 没有 callable handler，不能在代码里直接调用
+  - 修复：改用 `@larksuiteoapi/node-sdk` 的 Client 直接调飞书 REST API 发消息
+- 创建新的纯机器人应用（替代之前的 AI 智能体）
+  - 智能体会拦截和改写回复，机器人则直接透传
+  - 新机器人发布并审批通过后，完整流程验证成功：消息收发正常，Claude 回复原样到达飞书
 
 ### 今日学习笔记
 
