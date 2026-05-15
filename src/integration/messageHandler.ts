@@ -107,7 +107,7 @@ async function handleMessageEvent(
   // Ignore stale messages (older than 30 seconds) — Feishu retries from when server was offline
   const messageCreateTime = parseInt(message.create_time || '0', 10);
   const now = Date.now();
-  if (messageCreateTime > 0 && (now - messageCreateTime) > 30000) {
+  if (messageCreateTime > 0 && (now - messageCreateTime) > 300000) {
     return;
   }
 
@@ -128,9 +128,9 @@ async function handleMessageEvent(
     textContent = message.content;
   }
 
-  // Build agent input
+  // Build agent input — use message_id as session to avoid stale context from previous failures
   const agentInput: AgentInput = {
-    sessionId: chatId,
+    sessionId: message.message_id,
     userId,
     messageType: 'text',
     content: textContent,

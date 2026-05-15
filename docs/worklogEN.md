@@ -338,6 +338,9 @@
     2. `create_time` older than 30 seconds → discard stale messages from replay queue
     3. `message_id` deduplication (in-memory Set, max 500 entries) → block same message pushed twice
   - **Key insight**: all three layers are necessary — `message_id` dedup alone can't stop infinite loops (each new reply has a different ID), and `sender_type` filter alone can't stop duplicate pushes (same user message pushed twice)
+- Fixed message handler session and timeout strategy
+  - Changed `sessionId` to `message_id`: each message gets an independent session, preventing stale failure context from poisoning subsequent messages (Claude refuses to retry after seeing historical failures)
+  - Relaxed `create_time` filter from 30s to 5 minutes: Feishu push has network latency, 30s was too strict and incorrectly discarded valid messages
 
 ### Learning Notes
 
@@ -346,3 +349,8 @@
   - Long connection: your service connects to Feishu via WebSocket — Feishu pushes events over that connection, no public URL needed
   - Long connection is more convenient for development; both modes are valid for production
 - Learned that `--env-file` is a built-in Node.js 18+ feature — no need for the `dotenv` package
+- **Key discovery: Feishu MCP cannot be called directly in code**
+  - `@larksuiteoapi/lark-mcp` is designed for MCP Server mode (e.g., letting Claude Desktop call tools via MCP protocol) — tools have no callable handler
+  - `@larksuiteoapi/node-sdk` Client is the correct way to call Feishu REST APIs from code
+  - **Conclusion: for any Feishu operation (send messages, create tasks, update docs), use `node-sdk` Client, not MCP**
+  - This means `FeishuMcpService` in our architecture only serves to provide tool descriptions to Claude; actual execution must go through REST API

@@ -334,6 +334,9 @@
     2. `create_time` 超过 30 秒的消息直接丢弃 → 阻断旧消息积压重放
     3. `message_id` 去重（内存 Set，最多 500 条）→ 阻断同一条消息被推送两次
   - **关键洞察**：三层防护缺一不可——`message_id` 去重解决不了死循环（每条新回复有不同 ID），`sender_type` 过滤解决不了重复推送（同一条用户消息被推两次）
+- 修复消息处理器 session 和超时策略
+  - `sessionId` 改为 `message_id`：每条消息独立 session，避免之前失败的上下文污染后续消息（Claude 看到历史失败记录后会拒绝再次尝试）
+  - `create_time` 过滤阈值从 30 秒放宽到 5 分钟：飞书推送有网络延迟，30 秒太严格会误杀正常消息
 
 ### 今日学习笔记
 
@@ -342,3 +345,8 @@
   - 长连接：你的服务主动连飞书 WebSocket，飞书通过这条连接推事件，不需要公网地址
   - 开发阶段用长连接更方便，生产环境两种都可以
 - 理解了 `--env-file` 是 Node.js 18+ 内置功能，不需要 `dotenv` 包
+- **重要发现：飞书 MCP 不能在代码里直接调用**
+  - `@larksuiteoapi/lark-mcp` 是给 MCP Server 模式设计的（比如让 Claude Desktop 通过 MCP 协议调用），工具没有 callable handler
+  - `@larksuiteoapi/node-sdk` 的 Client 才是给代码直接调用的 REST API 封装
+  - **结论：凡是需要操作飞书的地方（发消息、创建任务、更新文档等），都用 `node-sdk` 的 Client，不用 MCP**
+  - 这意味着 `FeishuMcpService` 在当前架构下只用于给 Claude 提供工具列表（描述信息），实际执行要走 REST API
