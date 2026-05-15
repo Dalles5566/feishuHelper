@@ -366,3 +366,9 @@
   - 删掉 `FeishuMcpService` 依赖，改用 `@larksuiteoapi/node-sdk` Client
   - `createTask()` 内部调 `client.task.v2.task.create()` 替代 `mcpService.callTool('task_create', ...)`
   - 注意：当前 agentCore 的工具暂时直接调 Client（跳过 taskManager），后续需要改回调 taskManager 以串联数据库和状态管理
+
+- 注册 `analyze_meeting` 工具，将 MeetingAnalyzer 集成到 AgentCore 工作流
+  - 把 `meetingAnalyzer.analyze()` 注册为 LangChain 工具，LLM 收到会议纪要时会先调用它进行结构化分析
+  - system prompt 明确要求：收到会议内容时**必须先调 analyze_meeting**，拿到结构化行动项后再逐个调 create_feishu_task
+  - 这样 meetingAnalyzer 的能力（Zod schema 强制输出格式、长内容分段处理）都能被利用
+  - 如果用户直接说"创建任务：xxx"，LLM 判断不是会议内容，跳过分析直接创建

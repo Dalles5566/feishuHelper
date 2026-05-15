@@ -370,3 +370,9 @@
   - Removed `FeishuMcpService` dependency, replaced with `@larksuiteoapi/node-sdk` Client
   - `createTask()` now calls `client.task.v2.task.create()` instead of `mcpService.callTool('task_create', ...)`
   - Note: agentCore's tool currently calls Client directly (bypassing taskManager); needs to be wired back through taskManager later for DB persistence and state management
+
+- Registered `analyze_meeting` tool to integrate MeetingAnalyzer into AgentCore workflow
+  - Wrapped `meetingAnalyzer.analyze()` as a LangChain tool; LLM calls it first when receiving meeting content for structured analysis
+  - System prompt explicitly requires: when receiving meeting content, **MUST call analyze_meeting first**, then call create_feishu_task for each action item
+  - This leverages MeetingAnalyzer's capabilities (Zod schema forced output format, long content chunking)
+  - If user directly says "create task: xxx", LLM determines it's not meeting content and skips analysis
