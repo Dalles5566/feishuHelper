@@ -83,22 +83,23 @@ export interface AgentCoreOptions {
 const DEFAULT_SYSTEM_PROMPT = `You are Feishu Helper, an AI assistant that automates development workflows via Feishu.
 
 Your core capabilities:
-1. **Analyze meeting minutes**: When a user sends meeting content, extract action items (tasks), decisions, and key discussion points.
-2. **Create tasks**: When you identify action items or the user asks you to create a task, use the create_feishu_task tool to create it in Feishu.
+1. **Analyze meeting minutes**: When a user sends meeting content or conversation records, you MUST first call the analyze_meeting tool to get structured analysis results.
+2. **Create tasks**: After analyzing meeting content, create a task for each action item using create_feishu_task. Also use this tool when the user directly asks to create a task.
 3. **Reply in Chinese** unless the user writes in English.
 
-When you receive meeting minutes or a request to create a task:
-- Extract: title, description, assignee name, priority (high/medium/low), due date if mentioned
-- Call the create_feishu_task tool with the extracted information
-- Confirm to the user what was created
+WORKFLOW for meeting content:
+1. Call analyze_meeting with the meeting content
+2. Review the structured results (action items, decisions, summary)
+3. For each action item, call create_feishu_task with the extracted title, description, and due date
+4. Reply to the user with a summary of what was created, including all task URLs
 
 When creating tasks, always include:
 - A clear, concise title
 - A description with context from the meeting
-- The assignee name if mentioned
+- The due date if mentioned (in YYYY-MM-DD format)
 - **IMPORTANT: Always include the task URL link in your reply exactly as returned by the tool. Never omit or paraphrase the URL.**
 
-If the user just chats casually, respond naturally without creating tasks.`;
+If the user just chats casually or directly asks to create a single task (not meeting content), skip analyze_meeting and use create_feishu_task directly.`;
 
 const DEFAULT_MAX_CONTEXT_MESSAGES = 50;
 const MAX_TOOL_ITERATIONS = 10;
@@ -380,9 +381,33 @@ export class AgentCore {
    */
   private registerFeishuTools(feishuClient: any): void {
     this.tools = [
+      // Tool 1: Analyze meeting content
+      new DynamicStructuredTool({
+        name: 'analyze_meeting',
+        description: 'Analyze meeting minutes or conversation records to extract structured action items, decisions, and summary. MUST be called first when receiving meeting content.',
+        schema: z.object({
+          content: z.string().describe('The meeting minutes or conversation text to analyze'),
+        }),
+        func: async ({ content }) => {
+          try {
+            console.log(`[AgentCore] Analyzing meeting content (${content.length} chars)`);
+            const { MeetingAnalyzer } = await import('../services/meetingAnalyzer.js');
+            const analyzer = new MeetingAnalyzer();
+            const result = await analyzer.analyze(content);
+            console.log(`[AgentCore] Meeting analysis complete: ${result.actionItems.length} action items found`);
+            return JSON.stringify(result, null, 2);
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            console.error(`[AgentCore] Meeting analysis failed:`, msg);
+            return `❌ 会议分析失败: ${msg}`;
+          }
+        },
+      }),
+
+      // Tool 2: Create a task in Feishu
       new DynamicStructuredTool({
         name: 'create_feishu_task',
-        description: 'Create a task in Feishu. Use this when the user asks to create a task or when you extract action items from meeting minutes.',
+        description: 'Create a task in Feishu. Use this after analyzing meeting content for each action item, or when the user directly asks to create a task.',
         schema: z.object({
           summary: z.string().describe('Task title/summary'),
           description: z.string().optional().describe('Task description with context'),
