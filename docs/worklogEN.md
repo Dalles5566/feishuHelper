@@ -243,43 +243,6 @@
 
 ---
 
-## 2026-05-15 (Friday)
-
-### What was done today
-
-- Completed Task 15 Final Checkpoint: all 451 tests passing, TypeScript compiles without errors
-- MVP implementation complete — all required tasks (1.1 through 14.2) are done
-- Remaining optional tasks (Property-Based Tests, integration tests) marked with `*`, can be implemented as needed
-- Project scan: 21 test files, 451 tests, all passing; build clean (1 minor unused import warning only)
-- Fixed `npm run dev` not reading `.env` file
-  - Root cause: `tsx` does not auto-load `.env`; must be passed explicitly
-  - Fix: added `--env-file=.env` to `dev` and `start` scripts in `package.json`
-- Fixed `@larksuiteoapi/lark-mcp` printing CLI help on startup
-  - Root cause: `index.js` re-exports `cli.js`, which auto-executes Commander when imported
-  - Fix: import `LarkMcpTool` directly from `@larksuiteoapi/lark-mcp/dist/mcp-tool/index.js`, bypassing the CLI entry point
-- Successfully started the service: DB, Redis, LarkMCP all connected, `/health` returns 200
-- Added WebSocket long connection mode (`src/gateway/wsGateway.ts`)
-  - Reason: Feishu Open Platform is configured for "persistent connection" subscription mode — no public webhook URL needed
-  - Uses `WSClient` from `@larksuiteoapi/node-sdk` to connect to Feishu proactively; no ngrok/cloudflared required
-  - `WsGateway` bridges received events into the existing `EventDispatcher`; all other modules unchanged
-  - Updated `src/index.ts` to initialize `WsGateway` and start the connection on startup
-- Verified long connection works: logs show `[WsGateway] WebSocket connection established` and `ws client ready`
-- Feishu message successfully reached the service (`im.message.receive_v1` event received); found two data structure mismatches and fixed:
-  - **sender location wrong**: code assumed sender was inside message (`event.event.message.sender`), but Feishu actually sends sender as a sibling of message (`event.event.sender`)
-  - **user_id is null**: Feishu returns `user_id` as null, need to use `open_id` as user identifier instead
-  - Fixed `src/integration/messageHandler.ts`: read from `event.event.sender`, prefer `open_id`
-  - Fixed `src/gateway/wsGateway.ts` `bridgeEvent`: correctly split SDK's flat data into header + event payload
-
-### Learning Notes
-
-- Understood the difference between Webhook mode and long connection mode:
-  - Webhook: Feishu POSTs to your service — requires a public URL
-  - Long connection: your service connects to Feishu via WebSocket — Feishu pushes events over that connection, no public URL needed
-  - Long connection is more convenient for development; both modes are valid for production
-- Learned that `--env-file` is a built-in Node.js 18+ feature — no need for the `dotenv` package
-
----
-
 ## 2026-05-14 (Thursday)
 
 ### What was done today
@@ -325,3 +288,41 @@
   - App config: PORT (listen port), NODE_ENV (environment), LOG_LEVEL (logging level)
 - Understood Task 14.2 integration core: messageHandler wires dispatcher, agentCore, and notificationService together
 - MVP uses direct AgentCore calls (no queue); can switch to queue mode by changing one line later
+
+
+---
+
+## 2026-05-15 (Friday)
+
+### What was done today
+
+- Completed Task 15 Final Checkpoint: all 451 tests passing, TypeScript compiles without errors
+- MVP implementation complete — all required tasks (1.1 through 14.2) are done
+- Remaining optional tasks (Property-Based Tests, integration tests) marked with `*`, can be implemented as needed
+- Project scan: 21 test files, 451 tests, all passing; build clean (1 minor unused import warning only)
+- Fixed `npm run dev` not reading `.env` file
+  - Root cause: `tsx` does not auto-load `.env`; must be passed explicitly
+  - Fix: added `--env-file=.env` to `dev` and `start` scripts in `package.json`
+- Fixed `@larksuiteoapi/lark-mcp` printing CLI help on startup
+  - Root cause: `index.js` re-exports `cli.js`, which auto-executes Commander when imported
+  - Fix: import `LarkMcpTool` directly from `@larksuiteoapi/lark-mcp/dist/mcp-tool/index.js`, bypassing the CLI entry point
+- Successfully started the service: DB, Redis, LarkMCP all connected, `/health` returns 200
+- Added WebSocket long connection mode (`src/gateway/wsGateway.ts`)
+  - Reason: Feishu Open Platform is configured for "persistent connection" subscription mode — no public webhook URL needed
+  - Uses `WSClient` from `@larksuiteoapi/node-sdk` to connect to Feishu proactively; no ngrok/cloudflared required
+  - `WsGateway` bridges received events into the existing `EventDispatcher`; all other modules unchanged
+  - Updated `src/index.ts` to initialize `WsGateway` and start the connection on startup
+- Verified long connection works: logs show `[WsGateway] WebSocket connection established` and `ws client ready`
+- Feishu message successfully reached the service (`im.message.receive_v1` event received); found two data structure mismatches and fixed:
+  - **sender location wrong**: code assumed sender was inside message (`event.event.message.sender`), but Feishu actually sends sender as a sibling of message (`event.event.sender`)
+  - **user_id is null**: Feishu returns `user_id` as null, need to use `open_id` as user identifier instead
+  - Fixed `src/integration/messageHandler.ts`: read from `event.event.sender`, prefer `open_id`
+  - Fixed `src/gateway/wsGateway.ts` `bridgeEvent`: correctly split SDK's flat data into header + event payload
+
+### Learning Notes
+
+- Understood the difference between Webhook mode and long connection mode:
+  - Webhook: Feishu POSTs to your service — requires a public URL
+  - Long connection: your service connects to Feishu via WebSocket — Feishu pushes events over that connection, no public URL needed
+  - Long connection is more convenient for development; both modes are valid for production
+- Learned that `--env-file` is a built-in Node.js 18+ feature — no need for the `dotenv` package
