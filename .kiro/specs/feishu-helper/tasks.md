@@ -281,3 +281,66 @@
 - Checkpoint 任务确保增量验证，及早发现问题
 - Property Tests 使用 `fast-check` 库验证核心业务规则的正确性
 - 所有代码使用 TypeScript，遵循项目 rules.md 中的命名规范
+
+
+---
+
+## Phase 2: 联调与集成（从 MCP 切换到 REST API）
+
+### 背景
+
+Phase 1 完成了各模块的独立实现，但联调时发现 `@larksuiteoapi/lark-mcp` 的工具不能在代码里直接调用（no callable handler）。所有飞书操作需要改用 `@larksuiteoapi/node-sdk` Client 直接调 REST API。
+
+### 已完成
+
+- [x] 16.1 WebSocket 长连接模式（wsGateway）
+- [x] 16.2 消息去重 + 防循环（sender_type 过滤 + message_id 去重 + create_time 过滤）
+- [x] 16.3 NotificationService 改用 REST API 发消息
+- [x] 16.4 AgentCore 注册 create_feishu_task 工具（REST API）
+- [x] 16.5 AgentCore 注册 analyze_meeting 工具（调 MeetingAnalyzer）
+- [x] 16.6 TaskManager.createTask() 改用 REST API
+- [x] 16.7 数据库 schema 重构：task-meeting 多对多关系（task_meetings 表）
+- [x] 16.8 会议内容保存到 meetings 表 + task_meetings 关联
+
+### 待完成
+
+- [ ] 17.1 AgentCore 的 create_feishu_task 改为调 TaskManager（完整流程：飞书API + DB + 状态机）
+  - 当前工具直接调 node-sdk Client，跳过了 TaskManager
+  - 需要改回调 taskManager.createTask()，让数据库和状态管理生效
+  - **注意**：TaskManager 里的 splitTask 方法还引用了已删除的 meeting_id 列，需要修复
+
+- [ ] 17.2 注册更多 AgentCore 工具
+  - update_feishu_task：修改任务描述/标题
+  - assign_task：分配任务给人（调 taskAssignment）
+  - complete_task：标记任务完成
+  - list_tasks：查询任务列表
+
+- [ ] 17.3 TaskAssignment 改用 REST API
+  - 当前 taskAssignment.ts 可能还依赖 MCP
+  - 需要改为通过 node-sdk Client 添加任务成员
+
+- [ ] 17.4 WorkflowEngine 串联
+  - 创建任务后自动进入 Created 状态（已实现）
+  - 分配任务后推进到 Assigned 状态
+  - 状态变更时发送通知
+
+- [ ] 17.5 修复测试
+  - taskManager.test.ts 有 44 个测试失败（因为接口从 MCP 改成了 REST API）
+  - 需要更新 mock 和测试用例
+
+- [ ] 17.6 清理代码
+  - 删除 AgentCore 中的调试日志（console.log）
+  - 删除 wsGateway 中的 RAW 数据打印
+  - 考虑是否保留 feishuMcp.ts 和 feishuAuth.ts（当前不再使用）
+
+- [ ] 17.7 创建 MeetingService
+  - 将 meetings 表的 CRUD 操作从 AgentCore 工具函数中抽出
+  - 提供 createMeeting、getMeeting、linkTaskToMeeting 等方法
+
+### 架构决策记录
+
+1. **飞书 MCP 不能在代码里直接调用** — 所有飞书操作统一用 `@larksuiteoapi/node-sdk` Client
+2. **AgentCore 只做调度** — 工具函数调 Service 层，不直接操作数据库
+3. **task-meeting 多对多** — 通过 task_meetings 关联表，一个任务可关联多次会议
+4. **长连接模式** — 开发环境用 WebSocket，不需要公网地址
+5. **消息三层防护** — sender_type 过滤 + create_time 过滤 + message_id 去重
