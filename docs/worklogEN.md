@@ -383,3 +383,13 @@
   - Database `tasks.meeting_id` made nullable to support creating tasks without a meeting association
   - Verified: Feishu task creation + database record both succeed
   - TODO: when receiving meeting content, create a meeting record first, then associate tasks with it
+
+- Implemented meeting content persistence + task_meetings linking
+  - `analyze_meeting` tool now saves raw meeting content and analysis results to `meetings` table after analysis
+  - `create_feishu_task` tool accepts `meeting_id` parameter, creates junction record in `task_meetings` after task creation
+  - Verified: all three tables (meetings, tasks, task_meetings) contain correct data
+- Fixed `task_meetings` INSERT error "Insert did not return a row"
+  - **Root cause**: `insert` utility function requires SQL to return rows (via `RETURNING` clause), but `ON CONFLICT DO NOTHING` returns no rows on conflict
+  - **Fix**: use `query` function (doesn't check row count) instead of `insert` function
+  - **Lesson**: `insert` function is only for INSERTs guaranteed to return rows; use `query` for `ON CONFLICT DO NOTHING`
+- Added task URL list appending in messageHandler (compromise: Claude replies naturally + code forcibly appends links)

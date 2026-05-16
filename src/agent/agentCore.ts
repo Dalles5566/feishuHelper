@@ -88,9 +88,9 @@ Your core capabilities:
 3. **Reply in Chinese** unless the user writes in English.
 
 WORKFLOW for meeting content:
-1. Call analyze_meeting with the meeting content
+1. Call analyze_meeting with the meeting content — this saves the meeting to DB and returns a meetingId
 2. Review the structured results (action items, decisions, summary)
-3. For each action item from the analysis, create exactly ONE task using create_feishu_task. Do NOT split action items into sub-tasks. Only create tasks that are explicitly mentioned as action items.
+3. For each action item from the analysis, create exactly ONE task using create_feishu_task. Do NOT split action items into sub-tasks. Only create tasks that are explicitly mentioned as action items. Pass the meetingId from step 1 to link the task to the meeting.
 4. Reply to the user with a summary of what was created, including all task URLs
 
 When creating tasks, always include:
@@ -392,10 +392,26 @@ export class AgentCore {
           try {
             console.log(`[AgentCore] Analyzing meeting content (${content.length} chars)`);
             const { MeetingAnalyzer } = await import('../services/meetingAnalyzer.js');
+            const { insert } = await import('../utils/db.js');
             const analyzer = new MeetingAnalyzer();
             const result = await analyzer.analyze(content);
             console.log(`[AgentCore] Meeting analysis complete: ${result.actionItems.length} action items found`);
-            return JSON.stringify(result, null, 2);
+
+            // Save meeting to database
+            const meetingRow = await insert(
+              `INSERT INTO meetings (title, feishu_doc_id, raw_content, analysis)
+               VALUES ($1, $2, $3, $4) RETURNING id`,
+              [
+                result.summary?.title || 'Untitled Meeting',
+                `msg-${Date.now()}`,
+                content,
+                JSON.stringify(result),
+              ],
+            );
+            const meetingId = (meetingRow as any).id;
+            console.log(`[AgentCore] Meeting saved to DB: ${meetingId}`);
+
+            return JSON.stringify({ meetingId, ...result }, null, 2);
           } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
             console.error(`[AgentCore] Meeting analysis failed:`, msg);
@@ -412,10 +428,11 @@ export class AgentCore {
           summary: z.string().describe('Task title/summary'),
           description: z.string().optional().describe('Task description with context'),
           due_date: z.string().optional().describe('Due date in YYYY-MM-DD format, e.g. 2026-05-25. Leave empty if no due date.'),
+          meeting_id: z.string().optional().describe('The meeting ID returned by analyze_meeting. Pass this to link the task to the meeting.'),
         }),
-        func: async ({ summary, description, due_date }) => {
+        func: async ({ summary, description, due_date, meeting_id }) => {
           try {
-            console.log(`[AgentCore] Creating task: "${summary}", due: ${due_date || 'none'}`);
+            console.log(`[AgentCore] Creating task: "${summary}", due: ${due_date || 'none'}, meeting: ${meeting_id || 'none'}`);
 
             // Use TaskManager for full flow (Feishu API + DB persistence)
             const { TaskManager } = await import('../services/taskManager.js');
@@ -430,9 +447,18 @@ export class AgentCore {
               sourceActionItemId: `agent-${Date.now()}`,
             });
 
+            // Link task to meeting if meeting_id provided
+            if (meeting_id) {
+              const { query: dbQuery } = await import('../utils/db.js');
+              await dbQuery(
+                `INSERT INTO task_meetings (task_id, meeting_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+                [task.id, meeting_id],
+              );
+              console.log(`[AgentCore] Linked task ${task.id} to meeting ${meeting_id}`);
+            }
+
             console.log(`[AgentCore] Task created and saved to DB: ${task.id}, feishu: ${task.feishuTaskId}`);
 
-            // Get the task URL from Feishu (construct it from the GUID)
             const taskUrl = `https://applink.feishu.cn/client/todo/detail?guid=${task.feishuTaskId}`;
             return `✅ 任务创建成功！\n标题: ${summary}\n链接: ${taskUrl}`;
           } catch (err) {

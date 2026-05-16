@@ -144,13 +144,27 @@ async function handleMessageEvent(
   // Process through AgentCore
   const output = await agentCore.processInput(agentInput);
 
+  // Extract task URLs from tool call results and append to response
+  let responseText = output.response || '';
+  const taskUrls = output.actions
+    .filter((a) => a.type === 'tool_call' && (a as any).result?.includes('链接:'))
+    .map((a) => {
+      const match = (a as any).result?.match(/链接: (https:\/\/[^\s]+)/);
+      return match ? match[1] : null;
+    })
+    .filter(Boolean);
+
+  if (taskUrls.length > 0 && !responseText.includes('applink.feishu.cn')) {
+    responseText += `\n\n📋 任务链接：\n${taskUrls.map((url, i) => `${i + 1}. ${url}`).join('\n')}`;
+  }
+
   // Send response back to user
-  if (output.response) {
+  if (responseText) {
     await notificationService.sendNotification({
-      type: 'task_assigned', // Generic notification type for agent responses
+      type: 'task_assigned',
       recipientId: userId,
       chatId,
-      content: output.response,
+      content: responseText,
     });
   }
 }

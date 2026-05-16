@@ -379,3 +379,13 @@
   - 数据库 `tasks.meeting_id` 改为可选（允许 NULL），支持不关联会议直接创建任务
   - 验证成功：飞书任务创建 + 数据库记录同时完成
   - 待完善：发送会议纪要时应先创建 meeting 记录，再关联到 task
+
+- 实现会议内容保存 + task_meetings 关联
+  - `analyze_meeting` 工具分析完后自动将会议原始内容和分析结果存入 `meetings` 表
+  - `create_feishu_task` 工具接受 `meeting_id` 参数，创建任务后在 `task_meetings` 表建立关联
+  - 验证成功：三张表（meetings、tasks、task_meetings）都有正确数据
+- 修复 `task_meetings` INSERT 报错 "Insert did not return a row"
+  - **根因**：`insert` 工具函数要求 SQL 必须返回行（`RETURNING` 子句），但 `ON CONFLICT DO NOTHING` 在冲突时不返回任何行
+  - **修复**：改用 `query` 函数（不检查返回行数）代替 `insert` 函数
+  - **教训**：`insert` 函数只适合确定会返回行的 INSERT，带 `ON CONFLICT DO NOTHING` 的要用 `query`
+- 在 messageHandler 中追加任务 URL 列表到回复末尾（折中方案：Claude 正常回复 + 代码硬性追加链接）
