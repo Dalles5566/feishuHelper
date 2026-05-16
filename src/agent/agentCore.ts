@@ -86,7 +86,13 @@ Your core capabilities:
 4. **Update tasks**: Use update_task to modify task descriptions when requirements change.
 5. **Assign tasks**: Use assign_task to assign a task to a developer.
 6. **Complete tasks**: Use complete_task to mark a task as done.
-7. **Reply in Chinese** unless the user writes in English.
+7. **Look up employees**: Use lookup_employee to find a person's open_id by name. You need the open_id to assign tasks or filter tasks by assignee.
+8. **Reply in Chinese** unless the user writes in English.
+
+DATABASE CONTEXT:
+- The "employees" table maps names to Feishu open_ids. Columns: open_id, name, status (active/on_leave/inactive).
+- The "tasks" table stores assignee_id as a Feishu open_id (not a name).
+- When the user mentions a person by name, FIRST call lookup_employee to get their open_id, THEN use that open_id in list_tasks or assign_task.
 
 WORKFLOW for meeting content:
 1. Call analyze_meeting with the meeting content — this saves the meeting to DB and returns a meetingId
@@ -431,10 +437,25 @@ export class AgentCore {
           due_date: z.string().optional().describe('Due date in YYYY-MM-DD format, e.g. 2026-05-25. Leave empty if no due date.'),
           meeting_id: z.string().optional().describe('The meeting ID returned by analyze_meeting. Pass this to link the task to the meeting.'),
           task_type: z.enum(['feature', 'bugfix']).optional().describe('Task type: "feature" for new features (prefix F-), "bugfix" for bug fixes (prefix B-). Defaults to "feature".'),
+          assignee: z.string().optional().describe('Name of the person to assign this task to. Must match a name in the employees table. Leave empty if not assigning yet.'),
         }),
-        func: async ({ summary, description, due_date, meeting_id, task_type }) => {
+        func: async ({ summary, description, due_date, meeting_id, task_type, assignee }) => {
           try {
-            console.log(`[AgentCore] Creating task: "${summary}", type: ${task_type || 'feature'}, due: ${due_date || 'none'}, meeting: ${meeting_id || 'none'}`);
+            console.log(`[AgentCore] Creating task: "${summary}", type: ${task_type || 'feature'}, due: ${due_date || 'none'}, assignee: ${assignee || 'none'}`);
+
+            // Look up assignee open_id from employees table if name provided
+            let assigneeOpenId: string | undefined;
+            if (assignee) {
+              const { queryOne } = await import('../utils/db.js');
+              const employee = await queryOne<any>(
+                `SELECT open_id FROM employees WHERE name = $1 AND status = 'active'`,
+                [assignee],
+              );
+              if (!employee) {
+                return `❌ 找不到员工: "${assignee}"。请确认名字是否正确，或者该员工是否在职。`;
+              }
+              assigneeOpenId = employee.open_id;
+            }
 
             // Use TaskManager for full flow (Feishu API + DB persistence)
             const { TaskManager } = await import('../services/taskManager.js');
@@ -449,6 +470,7 @@ export class AgentCore {
               sourceActionItemId: `agent-${Date.now()}`,
               taskType: task_type || 'feature',
               dueDate: due_date,
+              assigneeId: assigneeOpenId,
             });
 
             // Link task to meeting if meeting_id provided
@@ -458,13 +480,12 @@ export class AgentCore {
                 `INSERT INTO task_meetings (task_id, meeting_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
                 [task.id, meeting_id],
               );
-              console.log(`[AgentCore] Linked task ${task.id} to meeting ${meeting_id}`);
             }
 
             console.log(`[AgentCore] Task created: ${task.displayId} (${task.id}), feishu: ${task.feishuTaskId}`);
 
             const taskUrl = `https://applink.feishu.cn/client/todo/detail?guid=${task.feishuTaskId}`;
-            return `✅ 任务创建成功！\n编号: ${task.displayId}\n标题: ${summary}\n链接: ${taskUrl}`;
+            return `✅ 任务创建成功！\n编号: ${task.displayId}\n标题: ${summary}${assignee ? `\n分配给: ${assignee}` : ''}\n链接: ${taskUrl}`;
           } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
             console.error(`[AgentCore] Task creation failed:`, msg);
@@ -476,11 +497,11 @@ export class AgentCore {
       // Tool 3: List tasks
       new DynamicStructuredTool({
         name: 'list_tasks',
-        description: 'List tasks from the database with optional filters. Use this when the user asks about their tasks, task status, or wants to see what tasks exist.',
+        description: 'List tasks from the database with optional filters. Use this when the user asks about their tasks, task status, or wants to see what tasks exist. The assignee filter requires an open_id — use lookup_employee first to get it from a name.',
         schema: z.object({
           state: z.string().optional().describe('Filter by task state: Created, Assigned, InDevelopment, VerificationPending, VerificationPassed, VerificationFailed, QAPending, QAPassed, QAFailed, DocumentationUpdated, Completed'),
           priority: z.string().optional().describe('Filter by priority: high, medium, low'),
-          assignee: z.string().optional().describe('Filter by assignee user ID'),
+          assignee: z.string().optional().describe('Filter by assignee open_id (e.g. "ou_371598..."). Use lookup_employee to get this from a name.'),
         }),
         func: async ({ state, priority, assignee }) => {
           try {
@@ -498,11 +519,20 @@ export class AgentCore {
               return '没有找到匹配的任务。';
             }
 
+            // Look up assignee names for display
+            const { query: dbQuery } = await import('../utils/db.js');
+            const employeesResult = await dbQuery<any>(
+              `SELECT open_id, name FROM employees`,
+              [],
+            );
+            const nameMap = new Map(employeesResult.rows.map((e: any) => [e.open_id, e.name]));
+
             const taskList = tasks.map((t, i) => {
               const url = t.feishuTaskId
                 ? `https://applink.feishu.cn/client/todo/detail?guid=${t.feishuTaskId}`
                 : '';
-              return `${i + 1}. ${t.displayId} [${t.state}] ${t.title}${t.assignee ? ` (分配给: ${t.assignee})` : ''}${url ? `\n   链接: ${url}` : ''}`;
+              const assigneeName = t.assignee ? (nameMap.get(t.assignee) || t.assignee) : '未分配';
+              return `${i + 1}. ${t.displayId} [${t.state}] ${t.title} (${assigneeName})${url ? `\n   链接: ${url}` : ''}`;
             }).join('\n');
 
             return `找到 ${tasks.length} 个任务：\n${taskList}`;
@@ -596,25 +626,44 @@ export class AgentCore {
       // Tool 6: Assign task to a person
       new DynamicStructuredTool({
         name: 'assign_task',
-        description: 'Assign a task to a developer. Use this when the user wants to assign or reassign a task to someone.',
+        description: 'Assign a task to a developer by their open_id. Use lookup_employee first to get the open_id from a name.',
         schema: z.object({
-          task_id: z.string().describe('The task ID (UUID) to assign'),
-          assignee_id: z.string().describe('The Feishu open_id of the person to assign to'),
-          assignee_name: z.string().describe('The name of the person being assigned'),
+          task_id: z.string().describe('The task ID (UUID) or display_id (e.g. F-000001) to assign'),
+          assignee_open_id: z.string().describe('The Feishu open_id of the person (get this from lookup_employee)'),
+          assignee_name: z.string().describe('The name of the person being assigned (for record keeping)'),
         }),
-        func: async ({ task_id, assignee_id, assignee_name }) => {
+        func: async ({ task_id, assignee_open_id, assignee_name }) => {
           try {
+            const { queryOne, update: dbUpdate } = await import('../utils/db.js');
+
+            // Resolve task_id if it's a display_id
+            let resolvedTaskId = task_id;
+            if (/^[FB]-\d{6}$/.test(task_id)) {
+              const row = await queryOne<any>(
+                'SELECT id FROM tasks WHERE display_id = $1',
+                [task_id],
+              );
+              if (!row) return `❌ 任务不存在: ${task_id}`;
+              resolvedTaskId = row.id;
+            }
+
+            // Update tasks table with assignee
+            await dbUpdate(
+              `UPDATE tasks SET assignee_id = $1, updated_at = NOW() WHERE id = $2`,
+              [assignee_open_id, resolvedTaskId],
+            );
+
+            // Create assignment record
             const { TaskAssignmentService } = await import('../services/taskAssignment.js');
             const assignmentService = new TaskAssignmentService();
-
-            const assignment = await assignmentService.assignTask({
-              taskId: task_id,
-              assigneeId: assignee_id,
+            await assignmentService.assignTask({
+              taskId: resolvedTaskId,
+              assigneeId: assignee_open_id,
               assigneeName: assignee_name,
               assignedBy: 'agent',
             });
 
-            return `✅ 任务已分配给 ${assignee_name}\n任务ID: ${task_id}\n分配记录ID: ${assignment.id}`;
+            return `✅ 任务已分配给 ${assignee_name}\n任务: ${task_id}`;
           } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
             return `❌ 分配任务失败: ${msg}`;
@@ -639,6 +688,49 @@ export class AgentCore {
           } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
             return `❌ 完成任务失败: ${msg}`;
+          }
+        },
+      }),
+
+      // Tool 8: Look up employee by name
+      new DynamicStructuredTool({
+        name: 'lookup_employee',
+        description: 'Look up an employee by name to get their open_id. Use this BEFORE calling list_tasks with assignee filter or assign_task. Returns the open_id needed for those tools.',
+        schema: z.object({
+          name: z.string().describe('The employee name to look up (e.g. "刘秉麟")'),
+        }),
+        func: async ({ name }) => {
+          try {
+            const { query: dbQuery } = await import('../utils/db.js');
+            // Try exact match first, then partial match
+            const exactResult = await dbQuery<any>(
+              `SELECT open_id, name, status FROM employees WHERE name = $1`,
+              [name],
+            );
+
+            if (exactResult.rows.length > 0) {
+              const emp = exactResult.rows[0];
+              return JSON.stringify({ open_id: emp.open_id, name: emp.name, status: emp.status });
+            }
+
+            // Partial match (name contains the search term)
+            const partialResult = await dbQuery<any>(
+              `SELECT open_id, name, status FROM employees WHERE name LIKE '%' || $1 || '%'`,
+              [name],
+            );
+
+            if (partialResult.rows.length === 1) {
+              const emp = partialResult.rows[0];
+              return JSON.stringify({ open_id: emp.open_id, name: emp.name, status: emp.status });
+            } else if (partialResult.rows.length > 1) {
+              const names = partialResult.rows.map((r: any) => r.name).join(', ');
+              return `找到多个匹配: ${names}。请提供更精确的名字。`;
+            }
+
+            return `❌ 找不到员工: "${name}"`;
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            return `❌ 查询员工失败: ${msg}`;
           }
         },
       }),

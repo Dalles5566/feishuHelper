@@ -16,6 +16,19 @@ CREATE TABLE IF NOT EXISTS meetings (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Employees table (manually maintained team roster)
+CREATE TABLE IF NOT EXISTS employees (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  open_id VARCHAR(100) NOT NULL UNIQUE,
+  name VARCHAR(200) NOT NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'active',  -- active, on_leave, inactive
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_employees_open_id ON employees(open_id);
+CREATE INDEX IF NOT EXISTS idx_employees_status ON employees(status);
+
 -- Tasks table
 CREATE TABLE IF NOT EXISTS tasks (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

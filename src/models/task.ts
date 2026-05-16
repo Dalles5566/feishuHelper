@@ -121,6 +121,8 @@ export interface TaskCreateParams {
   taskType?: 'feature' | 'bugfix';
   /** Due date in YYYY-MM-DD format. Optional. */
   dueDate?: string;
+  /** Feishu open_id of the assignee. Optional. */
+  assigneeId?: string;
 }
 
 /**

@@ -365,7 +365,8 @@ describe('AgentCore', () => {
       expect(toolNames).toContain('update_task');
       expect(toolNames).toContain('assign_task');
       expect(toolNames).toContain('complete_task');
-      expect(tools.length).toBe(7);
+      expect(toolNames).toContain('lookup_employee');
+      expect(tools.length).toBe(8);
     });
 
     it('should have descriptions for all registered tools', async () => {

@@ -110,9 +110,9 @@ export class TaskManager {
       `INSERT INTO tasks (
         title, description, acceptance_criteria, dependencies,
         priority, state, source_action_item_id,
-        retry_count, description_history, task_type, display_id
+        retry_count, description_history, task_type, display_id, assignee_id
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
-        $11 || LPAD(nextval('task_display_id_seq')::text, 6, '0')
+        $11 || LPAD(nextval('task_display_id_seq')::text, 6, '0'), $12
       )
       RETURNING *`,
       [
@@ -127,6 +127,7 @@ export class TaskManager {
         JSON.stringify([]),
         taskType,
         prefix,
+        params.assigneeId || null,
       ],
     );
 
@@ -139,12 +140,16 @@ export class TaskManager {
         const data: Record<string, unknown> = {
           summary: feishuTitle,
           description: params.description,
-          members: [{
-            type: 'user',
-            id: 'ou_371598589222259055562993853b8df0',
-            role: 'assignee',
-          }],
         };
+
+        // Add assignee as member if provided
+        if (params.assigneeId) {
+          data.members = [{
+            type: 'user',
+            id: params.assigneeId,
+            role: 'assignee',
+          }];
+        }
 
         // Add due date if provided (YYYY-MM-DD → millisecond timestamp, all-day)
         if (params.dueDate) {

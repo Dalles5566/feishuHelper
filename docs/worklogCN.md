@@ -442,3 +442,17 @@
   - `TaskCreateParams` 新增 `dueDate` 字段（YYYY-MM-DD 格式）
   - `TaskManager.createTask()` 将 dueDate 转为飞书 API 要求的格式（毫秒时间戳 + `is_all_day: true`）
   - AgentCore 的 `create_feishu_task` 工具将 `due_date` 参数传递给 TaskManager
+
+- 创建 `employees` 表（手动维护团队花名册）
+  - 字段：open_id、name、status（active/on_leave/inactive）
+  - 用于将人名映射到飞书 open_id
+- 新增 `lookup_employee` 工具（Tool 8）
+  - LLM 自己决定何时查询员工表，而不是代码硬编码查询逻辑
+  - 支持精确匹配和模糊匹配（输入"秉麟"能找到"刘秉麟"）
+- 重构 assignee 相关逻辑
+  - `create_feishu_task`：新增可选 `assignee` 参数（名字），内部查 employees 表拿 open_id
+  - `assign_task`：改为接受 open_id（LLM 先调 lookup_employee 获取）
+  - `list_tasks`：assignee 过滤改为接受 open_id（LLM 先调 lookup_employee 获取）
+  - `TaskManager.createTask()`：移除硬编码的 open_id，改为可选参数传入
+- 更新 system prompt：告知 LLM employees 表的存在和查询流程
+- 设计理念：让 LLM 自己编排多步查询（先查人再查任务），而不是代码替它做

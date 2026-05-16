@@ -446,3 +446,17 @@
   - Added `dueDate` field to `TaskCreateParams` (YYYY-MM-DD format)
   - `TaskManager.createTask()` converts dueDate to Feishu API format (millisecond timestamp + `is_all_day: true`)
   - AgentCore's `create_feishu_task` tool now passes `due_date` parameter to TaskManager
+
+- Created `employees` table (manually maintained team roster)
+  - Columns: open_id, name, status (active/on_leave/inactive)
+  - Maps human names to Feishu open_ids
+- Added `lookup_employee` tool (Tool 8)
+  - LLM decides when to query the employees table, rather than hardcoding lookup logic in tools
+  - Supports exact match and partial/fuzzy match (input "秉麟" finds "刘秉麟")
+- Refactored assignee-related logic
+  - `create_feishu_task`: added optional `assignee` param (name), internally looks up employees table for open_id
+  - `assign_task`: now accepts open_id directly (LLM calls lookup_employee first)
+  - `list_tasks`: assignee filter now accepts open_id (LLM calls lookup_employee first)
+  - `TaskManager.createTask()`: removed hardcoded open_id, now accepts optional assigneeId param
+- Updated system prompt: informs LLM about employees table structure and lookup workflow
+- Design philosophy: let LLM orchestrate multi-step queries (lookup person → query tasks) instead of code doing it implicitly
