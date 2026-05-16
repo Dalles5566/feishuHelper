@@ -426,3 +426,18 @@
 - **Final architecture confirmed**: AgentCore tool functions → Service layer (TaskManager / MeetingAnalyzer etc.) → node-sdk Client (Feishu REST API) + db.ts (PostgreSQL)
 - MCP has no place in the current architecture; `@larksuiteoapi/lark-mcp` fully removed
 - `feishuMcp.ts` and `feishuAuth.ts` were dead code and have been cleaned up
+
+- Registered 5 new AgentCore tools (Task 17.2)
+  - `list_tasks`: query tasks by state/priority/assignee
+  - `get_task`: get task details (supports both UUID and display_id lookup)
+  - `update_task`: update task description (preserves history)
+  - `assign_task`: assign task to a developer (calls TaskAssignmentService)
+  - `complete_task`: mark task as completed (calls state machine)
+- Implemented display_id (human-readable task number)
+  - Format: `F-000001` (feature), `B-000001` (bugfix)
+  - Uses PostgreSQL sequence (`task_display_id_seq`) for guaranteed unique auto-increment
+  - Task creation flow changed to: write DB first to get display_id → call Feishu API (title format: `F-000001-Task Title`) → update DB with feishu_task_id
+  - Fixed PostgreSQL parameter type inference conflict (`$10` type ambiguity in subquery) by computing prefix in JS and passing as separate parameter
+- Consolidated 3 migration files into single `migrations/schema.sql`
+- Updated Task model with `displayId` and `taskType` fields
+- Backfilled existing tasks with display_id (F-000001 through F-000012)

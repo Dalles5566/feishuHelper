@@ -352,7 +352,7 @@ describe('AgentCore', () => {
   });
 
   describe('tool registration', () => {
-    it('should register analyze_meeting and create_feishu_task tools', async () => {
+    it('should register all expected tools', async () => {
       const agent = new AgentCore({ llm: createMockLlm() });
       await agent.initialize();
 
@@ -360,6 +360,12 @@ describe('AgentCore', () => {
       const toolNames = tools.map(t => t.name);
       expect(toolNames).toContain('analyze_meeting');
       expect(toolNames).toContain('create_feishu_task');
+      expect(toolNames).toContain('list_tasks');
+      expect(toolNames).toContain('get_task');
+      expect(toolNames).toContain('update_task');
+      expect(toolNames).toContain('assign_task');
+      expect(toolNames).toContain('complete_task');
+      expect(tools.length).toBe(7);
     });
 
     it('should have descriptions for all registered tools', async () => {

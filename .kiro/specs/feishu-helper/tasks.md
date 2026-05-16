@@ -304,16 +304,16 @@ Phase 1 完成了各模块的独立实现，但联调时发现 `@larksuiteoapi/l
 
 ### 待完成
 
-- [ ] 17.1 AgentCore 的 create_feishu_task 改为调 TaskManager（完整流程：飞书API + DB + 状态机）
-  - 当前工具直接调 node-sdk Client，跳过了 TaskManager
-  - 需要改回调 taskManager.createTask()，让数据库和状态管理生效
-  - **注意**：TaskManager 里的 splitTask 方法还引用了已删除的 meeting_id 列，需要修复
+- [x] 17.1 AgentCore 的 create_feishu_task 改为调 TaskManager（完整流程：飞书API + DB + 状态机）
+  - 已完成：create_feishu_task 工具调用 TaskManager.createTask()，走完整流程
+  - 已修复：TaskManager.splitTask() 从 MCP 改为 REST API，移除已删除的 meeting_id 列引用
 
-- [ ] 17.2 注册更多 AgentCore 工具
-  - update_feishu_task：修改任务描述/标题
-  - assign_task：分配任务给人（调 taskAssignment）
-  - complete_task：标记任务完成
-  - list_tasks：查询任务列表
+- [x] 17.2 注册更多 AgentCore 工具
+  - list_tasks：按状态/优先级/分配人查询任务列表
+  - get_task：查询单个任务详情
+  - update_task：修改任务描述（保留历史）
+  - assign_task：分配任务给人（调 TaskAssignmentService）
+  - complete_task：标记任务完成（调状态机）
 
 - [ ] 17.3 TaskAssignment 改用 REST API
   - 当前 taskAssignment.ts 可能还依赖 MCP
@@ -328,10 +328,11 @@ Phase 1 完成了各模块的独立实现，但联调时发现 `@larksuiteoapi/l
   - taskManager.test.ts 有 44 个测试失败（因为接口从 MCP 改成了 REST API）
   - 需要更新 mock 和测试用例
 
-- [ ] 17.6 清理代码
-  - 删除 AgentCore 中的调试日志（console.log）
-  - 删除 wsGateway 中的 RAW 数据打印
-  - 考虑是否保留 feishuMcp.ts 和 feishuAuth.ts（当前不再使用）
+- [-] 17.6 清理代码
+  - [x] 删除 feishuMcp.ts 和 feishuAuth.ts（已不再使用）
+  - [x] 移除 @larksuiteoapi/lark-mcp 依赖
+  - [ ] 删除 AgentCore 中的调试日志（console.log）
+  - [ ] 删除 wsGateway 中的 RAW 数据打印
 
 - [ ] 17.7 创建 MeetingService
   - 将 meetings 表的 CRUD 操作从 AgentCore 工具函数中抽出

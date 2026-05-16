@@ -422,3 +422,18 @@
 - **最终架构确认**：AgentCore 工具函数 → Service 层（TaskManager / MeetingAnalyzer 等）→ node-sdk Client（飞书 REST API）+ db.ts（PostgreSQL）
 - MCP 在当前架构中没有位置，`@larksuiteoapi/lark-mcp` 完全移除
 - `feishuMcp.ts` 和 `feishuAuth.ts` 是废代码，已清理
+
+- 注册 5 个新 AgentCore 工具（Task 17.2）
+  - `list_tasks`：按状态/优先级/分配人查询任务列表
+  - `get_task`：查询单个任务详情（支持 UUID 和 display_id 查询）
+  - `update_task`：修改任务描述（保留历史记录）
+  - `assign_task`：分配任务给开发者（调 TaskAssignmentService）
+  - `complete_task`：标记任务完成（调状态机）
+- 实现 display_id（人类可读任务编号）
+  - 格式：`F-000001`（新功能）、`B-000001`（Bug修复）
+  - 使用 PostgreSQL sequence（`task_display_id_seq`）保证唯一递增
+  - 创建任务流程改为：先写 DB 拿 display_id → 再调飞书 API（标题格式：`F-000001-任务标题`）→ 更新 DB 存 feishu_task_id
+  - 修复 PostgreSQL 参数类型推断冲突（`$10` 在 subquery 中类型歧义），改为 JS 侧计算前缀后传入
+- 合并 3 个 migration 文件为单一 `migrations/schema.sql`
+- 更新 Task model 新增 `displayId` 和 `taskType` 字段
+- 回填旧任务的 display_id（F-000001 到 F-000012）

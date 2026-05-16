@@ -53,6 +53,10 @@ export interface DescriptionUpdate {
  */
 export interface Task {
   id: string;
+  /** Display ID like F-000001 or B-000001. */
+  displayId: string;
+  /** Task type: 'feature' or 'bugfix'. Determines the prefix (F- or B-). */
+  taskType: 'feature' | 'bugfix';
   title: string;
   description: string;
   acceptanceCriteria: string[];
@@ -113,6 +117,8 @@ export interface TaskCreateParams {
   dependencies: string[];
   priority: 'high' | 'medium' | 'low';
   sourceActionItemId: string;
+  /** Task type: 'feature' or 'bugfix'. Defaults to 'feature'. */
+  taskType?: 'feature' | 'bugfix';
 }
 
 /**

@@ -1,8 +1,11 @@
--- Migration: 001_initial_schema
--- Description: Create all initial tables for the Feishu Helper system
--- Tables: meetings, tasks, workflow_logs, task_assignments, verification_reports, qa_feedbacks, documents
+-- Feishu Helper Database Schema
+-- Description: Complete schema for the Feishu Helper system
+-- Run this file to set up a fresh database from scratch
 
--- Meetings table (must be created before tasks due to FK reference)
+-- Sequence for generating display IDs (F-000001, B-000001)
+CREATE SEQUENCE IF NOT EXISTS task_display_id_seq START WITH 1 INCREMENT BY 1;
+
+-- Meetings table
 CREATE TABLE IF NOT EXISTS meetings (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   title VARCHAR(500),
@@ -16,6 +19,8 @@ CREATE TABLE IF NOT EXISTS meetings (
 -- Tasks table
 CREATE TABLE IF NOT EXISTS tasks (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  display_id VARCHAR(10) UNIQUE,
+  task_type VARCHAR(10) NOT NULL DEFAULT 'feature',
   title VARCHAR(500) NOT NULL,
   description TEXT NOT NULL,
   acceptance_criteria JSONB NOT NULL DEFAULT '[]',
@@ -24,7 +29,6 @@ CREATE TABLE IF NOT EXISTS tasks (
   state VARCHAR(30) NOT NULL DEFAULT 'Created',
   assignee_id VARCHAR(100),
   parent_task_id UUID REFERENCES tasks(id),
-  meeting_id UUID NOT NULL REFERENCES meetings(id),
   source_action_item_id VARCHAR(100),
   feishu_task_id VARCHAR(100),
   retry_count INTEGER NOT NULL DEFAULT 0,
@@ -32,6 +36,15 @@ CREATE TABLE IF NOT EXISTS tasks (
   description_history JSONB NOT NULL DEFAULT '[]',
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Task-Meeting junction table (many-to-many)
+CREATE TABLE IF NOT EXISTS task_meetings (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  task_id UUID NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+  meeting_id UUID NOT NULL REFERENCES meetings(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(task_id, meeting_id)
 );
 
 -- Workflow logs table
@@ -93,11 +106,13 @@ CREATE TABLE IF NOT EXISTS documents (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Indexes for common queries
-CREATE INDEX IF NOT EXISTS idx_tasks_meeting_id ON tasks(meeting_id);
+-- Indexes
+CREATE INDEX IF NOT EXISTS idx_tasks_display_id ON tasks(display_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_state ON tasks(state);
 CREATE INDEX IF NOT EXISTS idx_tasks_assignee_id ON tasks(assignee_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_parent_task_id ON tasks(parent_task_id);
+CREATE INDEX IF NOT EXISTS idx_task_meetings_task_id ON task_meetings(task_id);
+CREATE INDEX IF NOT EXISTS idx_task_meetings_meeting_id ON task_meetings(meeting_id);
 CREATE INDEX IF NOT EXISTS idx_workflow_logs_task_id ON workflow_logs(task_id);
 CREATE INDEX IF NOT EXISTS idx_workflow_logs_timestamp ON workflow_logs(timestamp);
 CREATE INDEX IF NOT EXISTS idx_task_assignments_task_id ON task_assignments(task_id);

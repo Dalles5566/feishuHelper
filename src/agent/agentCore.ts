@@ -82,7 +82,11 @@ const DEFAULT_SYSTEM_PROMPT = `You are Feishu Helper, an AI assistant that autom
 Your core capabilities:
 1. **Analyze meeting minutes**: When a user sends meeting content or conversation records, you MUST first call the analyze_meeting tool to get structured analysis results.
 2. **Create tasks**: After analyzing meeting content, create a task for each action item using create_feishu_task. Also use this tool when the user directly asks to create a task.
-3. **Reply in Chinese** unless the user writes in English.
+3. **Query tasks**: Use list_tasks to show task lists, or get_task to show details of a specific task.
+4. **Update tasks**: Use update_task to modify task descriptions when requirements change.
+5. **Assign tasks**: Use assign_task to assign a task to a developer.
+6. **Complete tasks**: Use complete_task to mark a task as done.
+7. **Reply in Chinese** unless the user writes in English.
 
 WORKFLOW for meeting content:
 1. Call analyze_meeting with the meeting content — this saves the meeting to DB and returns a meetingId
@@ -96,7 +100,9 @@ When creating tasks, always include:
 - The due date if mentioned (in YYYY-MM-DD format)
 - **IMPORTANT: Always include the task URL link in your reply exactly as returned by the tool. Never omit or paraphrase the URL.**
 
-If the user just chats casually or directly asks to create a single task (not meeting content), skip analyze_meeting and use create_feishu_task directly.`;
+If the user just chats casually or directly asks to create a single task (not meeting content), skip analyze_meeting and use create_feishu_task directly.
+
+When the user asks about task status, use list_tasks or get_task to look up real data. Never make up task information.`;
 
 const DEFAULT_MAX_CONTEXT_MESSAGES = 50;
 const MAX_TOOL_ITERATIONS = 10;
@@ -424,10 +430,11 @@ export class AgentCore {
           description: z.string().optional().describe('Task description with context'),
           due_date: z.string().optional().describe('Due date in YYYY-MM-DD format, e.g. 2026-05-25. Leave empty if no due date.'),
           meeting_id: z.string().optional().describe('The meeting ID returned by analyze_meeting. Pass this to link the task to the meeting.'),
+          task_type: z.enum(['feature', 'bugfix']).optional().describe('Task type: "feature" for new features (prefix F-), "bugfix" for bug fixes (prefix B-). Defaults to "feature".'),
         }),
-        func: async ({ summary, description, due_date, meeting_id }) => {
+        func: async ({ summary, description, due_date, meeting_id, task_type }) => {
           try {
-            console.log(`[AgentCore] Creating task: "${summary}", due: ${due_date || 'none'}, meeting: ${meeting_id || 'none'}`);
+            console.log(`[AgentCore] Creating task: "${summary}", type: ${task_type || 'feature'}, due: ${due_date || 'none'}, meeting: ${meeting_id || 'none'}`);
 
             // Use TaskManager for full flow (Feishu API + DB persistence)
             const { TaskManager } = await import('../services/taskManager.js');
@@ -440,6 +447,7 @@ export class AgentCore {
               dependencies: [],
               priority: 'medium',
               sourceActionItemId: `agent-${Date.now()}`,
+              taskType: task_type || 'feature',
             });
 
             // Link task to meeting if meeting_id provided
@@ -452,14 +460,184 @@ export class AgentCore {
               console.log(`[AgentCore] Linked task ${task.id} to meeting ${meeting_id}`);
             }
 
-            console.log(`[AgentCore] Task created and saved to DB: ${task.id}, feishu: ${task.feishuTaskId}`);
+            console.log(`[AgentCore] Task created: ${task.displayId} (${task.id}), feishu: ${task.feishuTaskId}`);
 
             const taskUrl = `https://applink.feishu.cn/client/todo/detail?guid=${task.feishuTaskId}`;
-            return `✅ 任务创建成功！\n标题: ${summary}\n链接: ${taskUrl}`;
+            return `✅ 任务创建成功！\n编号: ${task.displayId}\n标题: ${summary}\n链接: ${taskUrl}`;
           } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
             console.error(`[AgentCore] Task creation failed:`, msg);
             return `❌ 任务创建失败: ${msg}`;
+          }
+        },
+      }),
+
+      // Tool 3: List tasks
+      new DynamicStructuredTool({
+        name: 'list_tasks',
+        description: 'List tasks from the database with optional filters. Use this when the user asks about their tasks, task status, or wants to see what tasks exist.',
+        schema: z.object({
+          state: z.string().optional().describe('Filter by task state: Created, Assigned, InDevelopment, VerificationPending, VerificationPassed, VerificationFailed, QAPending, QAPassed, QAFailed, DocumentationUpdated, Completed'),
+          priority: z.string().optional().describe('Filter by priority: high, medium, low'),
+          assignee: z.string().optional().describe('Filter by assignee user ID'),
+        }),
+        func: async ({ state, priority, assignee }) => {
+          try {
+            const { TaskManager } = await import('../services/taskManager.js');
+            const taskManager = new TaskManager({ feishuClient });
+
+            const filter: Record<string, unknown> = {};
+            if (state) filter.state = state;
+            if (priority) filter.priority = priority;
+            if (assignee) filter.assignee = assignee;
+
+            const tasks = await taskManager.listTasks(filter as any);
+
+            if (tasks.length === 0) {
+              return '没有找到匹配的任务。';
+            }
+
+            const taskList = tasks.map((t, i) => {
+              const url = t.feishuTaskId
+                ? `https://applink.feishu.cn/client/todo/detail?guid=${t.feishuTaskId}`
+                : '';
+              return `${i + 1}. ${t.displayId} [${t.state}] ${t.title}${t.assignee ? ` (分配给: ${t.assignee})` : ''}${url ? `\n   链接: ${url}` : ''}`;
+            }).join('\n');
+
+            return `找到 ${tasks.length} 个任务：\n${taskList}`;
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            return `❌ 查询任务失败: ${msg}`;
+          }
+        },
+      }),
+
+      // Tool 4: Get task details
+      new DynamicStructuredTool({
+        name: 'get_task',
+        description: 'Get detailed information about a specific task by its ID or human-readable ID (e.g. F-000001). Use this when the user asks about a specific task status or details.',
+        schema: z.object({
+          task_id: z.string().describe('The task ID (UUID) or human-readable ID (e.g. F-000001, B-000002) to look up'),
+        }),
+        func: async ({ task_id }) => {
+          try {
+            const { TaskManager } = await import('../services/taskManager.js');
+            const taskManager = new TaskManager({ feishuClient });
+
+            let task;
+            // Check if it's a human-readable ID (starts with F- or B-)
+            if (/^[FB]-\d{6}$/.test(task_id)) {
+              const { queryOne } = await import('../utils/db.js');
+              const row = await queryOne<any>(
+                'SELECT * FROM tasks WHERE display_id = $1',
+                [task_id],
+              );
+              if (row) {
+                task = await taskManager.getTask(row.id);
+              }
+            } else {
+              task = await taskManager.getTask(task_id);
+            }
+
+            if (!task) {
+              return `❌ 任务不存在: ${task_id}`;
+            }
+
+            const url = task.feishuTaskId
+              ? `https://applink.feishu.cn/client/todo/detail?guid=${task.feishuTaskId}`
+              : '无';
+
+            return [
+              `📋 任务详情`,
+              `编号: ${task.displayId}`,
+              `标题: ${task.title}`,
+              `类型: ${task.taskType === 'bugfix' ? 'Bug修复' : '新功能'}`,
+              `状态: ${task.state}`,
+              `优先级: ${task.priority}`,
+              `描述: ${task.description}`,
+              `分配给: ${task.assignee || '未分配'}`,
+              `重试次数: ${task.retryCount}`,
+              `飞书链接: ${url}`,
+              `创建时间: ${task.createdAt}`,
+              `更新时间: ${task.updatedAt}`,
+              task.failureContext ? `失败原因: ${task.failureContext}` : '',
+            ].filter(Boolean).join('\n');
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            return `❌ 查询任务失败: ${msg}`;
+          }
+        },
+      }),
+
+      // Tool 5: Update task description/title
+      new DynamicStructuredTool({
+        name: 'update_task',
+        description: 'Update a task description or title. Use this when the user wants to modify task details based on new information or meeting updates.',
+        schema: z.object({
+          task_id: z.string().describe('The task ID (UUID) to update'),
+          description: z.string().describe('The new description for the task'),
+          reason: z.string().describe('Reason for the update (e.g. "Meeting update on 2026-05-16")'),
+        }),
+        func: async ({ task_id, description, reason }) => {
+          try {
+            const { TaskManager } = await import('../services/taskManager.js');
+            const taskManager = new TaskManager({ feishuClient });
+
+            const task = await taskManager.updateTaskDescription(task_id, description, reason);
+            return `✅ 任务已更新\n标题: ${task.title}\n新描述: ${task.description}\n原因: ${reason}`;
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            return `❌ 更新任务失败: ${msg}`;
+          }
+        },
+      }),
+
+      // Tool 6: Assign task to a person
+      new DynamicStructuredTool({
+        name: 'assign_task',
+        description: 'Assign a task to a developer. Use this when the user wants to assign or reassign a task to someone.',
+        schema: z.object({
+          task_id: z.string().describe('The task ID (UUID) to assign'),
+          assignee_id: z.string().describe('The Feishu open_id of the person to assign to'),
+          assignee_name: z.string().describe('The name of the person being assigned'),
+        }),
+        func: async ({ task_id, assignee_id, assignee_name }) => {
+          try {
+            const { TaskAssignmentService } = await import('../services/taskAssignment.js');
+            const assignmentService = new TaskAssignmentService();
+
+            const assignment = await assignmentService.assignTask({
+              taskId: task_id,
+              assigneeId: assignee_id,
+              assigneeName: assignee_name,
+              assignedBy: 'agent',
+            });
+
+            return `✅ 任务已分配给 ${assignee_name}\n任务ID: ${task_id}\n分配记录ID: ${assignment.id}`;
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            return `❌ 分配任务失败: ${msg}`;
+          }
+        },
+      }),
+
+      // Tool 7: Complete a task (mark as done)
+      new DynamicStructuredTool({
+        name: 'complete_task',
+        description: 'Mark a task as completed. Use this when the user says a task is done or wants to close a task.',
+        schema: z.object({
+          task_id: z.string().describe('The task ID (UUID) to mark as completed'),
+        }),
+        func: async ({ task_id }) => {
+          try {
+            const { TaskManager } = await import('../services/taskManager.js');
+            const taskManager = new TaskManager({ feishuClient });
+
+            const task = await taskManager.updateTaskState(task_id, 'Completed', 'User marked as completed');
+            return `✅ 任务已完成: ${task.title}`;
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            return `❌ 完成任务失败: ${msg}`;
           }
         },
       }),

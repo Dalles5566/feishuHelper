@@ -34,6 +34,8 @@ export interface TaskManagerOptions {
 /** Database row shape for the tasks table. */
 interface TaskRow extends Record<string, unknown> {
   id: string;
+  display_id: string;
+  task_type: string;
   title: string;
   description: string;
   acceptance_criteria: string[];
@@ -89,8 +91,9 @@ export class TaskManager {
   /**
    * Create a new task from meeting action item parameters.
    *
-   * 1. Creates the task in Feishu via MCP (with retry up to 3 times).
-   * 2. Persists the task locally in the database.
+   * 1. Persists the task in the database (generates display_id).
+   * 2. Creates the task in Feishu via REST API (title includes display_id).
+   * 3. Updates the database with the Feishu task GUID.
    *
    * @param params - Task creation parameters.
    * @returns The created task.
@@ -99,13 +102,44 @@ export class TaskManager {
   async createTask(params: TaskCreateParams): Promise<Task> {
     this.validateCreateParams(params);
 
-    // Create task in Feishu via REST API with retry logic (up to 3 times)
+    const taskType = params.taskType || 'feature';
+
+    // Step 1: Persist task in DB first to get display_id
+    const prefix = taskType === 'bugfix' ? 'B-' : 'F-';
+    const row = await insert<TaskRow>(
+      `INSERT INTO tasks (
+        title, description, acceptance_criteria, dependencies,
+        priority, state, source_action_item_id,
+        retry_count, description_history, task_type, display_id
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+        $11 || LPAD(nextval('task_display_id_seq')::text, 6, '0')
+      )
+      RETURNING *`,
+      [
+        params.title,
+        params.description,
+        JSON.stringify(params.acceptanceCriteria),
+        JSON.stringify(params.dependencies),
+        params.priority,
+        'Created',
+        params.sourceActionItemId,
+        0,
+        JSON.stringify([]),
+        taskType,
+        prefix,
+      ],
+    );
+
+    const displayId = row.display_id;
+    const feishuTitle = `${displayId}-${params.title}`;
+
+    // Step 2: Create task in Feishu via REST API (title includes display_id)
     const feishuTaskId = await withRetry(
       async () => {
         const response = await this.feishuClient.task.v2.task.create({
           params: { user_id_type: 'open_id' },
           data: {
-            summary: params.title,
+            summary: feishuTitle,
             description: params.description,
             members: [{
               type: 'user',
@@ -132,7 +166,7 @@ export class TaskManager {
           );
         }
 
-        console.log(`[TaskManager] Feishu task created: ${taskGuid}`);
+        console.log(`[TaskManager] Feishu task created: ${displayId} → ${taskGuid}`);
         return taskGuid;
       },
       {
@@ -144,29 +178,13 @@ export class TaskManager {
       },
     );
 
-    // Persist task in the local database
-    const row = await insert<TaskRow>(
-      `INSERT INTO tasks (
-        title, description, acceptance_criteria, dependencies,
-        priority, state, source_action_item_id, feishu_task_id,
-        retry_count, description_history
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-      RETURNING *`,
-      [
-        params.title,
-        params.description,
-        JSON.stringify(params.acceptanceCriteria),
-        JSON.stringify(params.dependencies),
-        params.priority,
-        'Created',
-        params.sourceActionItemId,
-        feishuTaskId,
-        0,
-        JSON.stringify([]),
-      ],
+    // Step 3: Update DB with Feishu task GUID
+    await update(
+      `UPDATE tasks SET feishu_task_id = $1, updated_at = NOW() WHERE id = $2`,
+      [feishuTaskId, row.id],
     );
 
-    return this.rowToTask(row);
+    return this.rowToTask({ ...row, feishu_task_id: feishuTaskId });
   }
 
   /**
@@ -526,6 +544,8 @@ export class TaskManager {
   private rowToTask(row: TaskRow): Task {
     return {
       id: row.id,
+      displayId: row.display_id || '',
+      taskType: (row.task_type as 'feature' | 'bugfix') || 'feature',
       title: row.title,
       description: row.description,
       acceptanceCriteria: Array.isArray(row.acceptance_criteria)

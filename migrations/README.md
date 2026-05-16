@@ -1,28 +1,28 @@
 # Database Migrations
 
-This directory contains SQL migration scripts for the Feishu Helper database.
+## Setup
 
-## Naming Convention
+Run `schema.sql` to create a fresh database:
 
-Migration files follow the pattern: `NNN_description.sql`
-
-- `NNN` — Zero-padded sequential number (e.g., 001, 002)
-- `description` — Brief snake_case description of the migration
-
-## Running Migrations
-
-Migrations are executed by the migration runner in `src/config/database.ts`.
-
-```typescript
-import { runMigrations } from './src/config/database.js';
-
-await runMigrations();
+```bash
+docker exec -i feishu-postgres psql -U postgres -d feishu_helper -f /dev/stdin < migrations/schema.sql
 ```
 
-The runner tracks applied migrations in a `schema_migrations` table and only applies new ones.
+## Schema Overview
 
-## Current Migrations
+- `meetings` — Meeting records with raw content and analysis
+- `tasks` — Development tasks with display_id (F-000001, B-000001), state machine, and history
+- `task_meetings` — Many-to-many junction between tasks and meetings
+- `workflow_logs` — State transition audit log
+- `task_assignments` — Task-developer assignment relationships
+- `verification_reports` — AI code verification results
+- `qa_feedbacks` — QA test results
+- `documents` — Generated test docs and manuals
 
-| File | Description |
-|------|-------------|
-| 001_initial_schema.sql | Creates all initial tables: meetings, tasks, workflow_logs, task_assignments, verification_reports, qa_feedbacks, documents |
+## Display ID
+
+Tasks get a human-readable `display_id` auto-generated via a PostgreSQL sequence:
+- `F-XXXXXX` for features
+- `B-XXXXXX` for bug fixes
+
+The sequence (`task_display_id_seq`) guarantees uniqueness without collision.
