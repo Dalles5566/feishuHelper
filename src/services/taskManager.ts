@@ -198,30 +198,35 @@ export class TaskManager {
     // Create each subtask
     const createdSubtasks: SubTask[] = [];
     for (const subtaskParams of subtasks) {
-      // Create in Feishu via MCP with retry
+      // Create in Feishu via REST API with retry
       const feishuTaskId = await withRetry(
         async () => {
-          const result = await this.feishuMcpService.callTool('task_create', {
-            title: subtaskParams.title,
-            description: subtaskParams.description,
-            parent_task_id: parentTask.feishuTaskId,
+          const response = await this.feishuClient.task.v2.task.create({
+            params: { user_id_type: 'open_id' },
+            data: {
+              summary: subtaskParams.title,
+              description: subtaskParams.description,
+            },
           });
 
-          const content = result.content[0]?.text;
-          if (!content) {
+          if ((response as any)?.code !== 0) {
             throw AppError.feishuApi(
-              'FEISHU_TASK_CREATE_EMPTY_RESPONSE',
-              'Feishu subtask creation returned empty response',
-              { subtaskParams },
+              'FEISHU_TASK_CREATE_FAILED',
+              `Feishu subtask creation failed: ${JSON.stringify(response)}`,
+              { subtaskParams, response },
             );
           }
 
-          try {
-            const parsed = JSON.parse(content);
-            return parsed.task_id ?? parsed.id ?? content;
-          } catch {
-            return content;
+          const taskGuid = (response as any)?.data?.task?.guid;
+          if (!taskGuid) {
+            throw AppError.feishuApi(
+              'FEISHU_TASK_CREATE_EMPTY_RESPONSE',
+              'Feishu subtask creation returned no task GUID',
+              { subtaskParams, response },
+            );
           }
+
+          return taskGuid;
         },
         {
           ...this.retryOptions,
@@ -236,9 +241,9 @@ export class TaskManager {
       const row = await insert<Record<string, unknown>>(
         `INSERT INTO tasks (
           title, description, acceptance_criteria, dependencies,
-          priority, state, parent_task_id, meeting_id, source_action_item_id,
+          priority, state, parent_task_id, source_action_item_id,
           feishu_task_id, retry_count, description_history
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
         RETURNING *`,
         [
           subtaskParams.title,
@@ -248,7 +253,6 @@ export class TaskManager {
           parentTask.priority,
           'Created',
           taskId,
-          parentTask.meetingId,
           parentTask.sourceActionItemId,
           feishuTaskId,
           0,
@@ -423,10 +427,6 @@ export class TaskManager {
     if (filter.assignee) {
       conditions.push(`assignee_id = $${paramIndex++}`);
       params.push(filter.assignee);
-    }
-    if (filter.meetingId) {
-      conditions.push(`meeting_id = $${paramIndex++}`);
-      params.push(filter.meetingId);
     }
     if (filter.priority) {
       conditions.push(`priority = $${paramIndex++}`);

@@ -20,7 +20,6 @@ import {
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import { z } from 'zod/v3';
 import { getConfig } from '../config/index.js';
-import { FeishuMcpService } from '../services/feishuMcp.js';
 import { AppError, LlmErrorCodes } from '../utils/errors.js';
 import { withRetry } from '../utils/retry.js';
 import type { TaskState } from '../models/index.js';
@@ -64,8 +63,6 @@ export interface ConversationContext {
 
 /** Options for creating an AgentCore instance. */
 export interface AgentCoreOptions {
-  /** Override the FeishuMcpService instance (useful for testing). */
-  mcpService?: FeishuMcpService;
   /** Override the LLM instance (useful for testing). */
   llm?: BaseChatModel;
   /** Override the system prompt. */
@@ -118,7 +115,6 @@ const MAX_TOOL_ITERATIONS = 10;
  * - Support both OpenAI and Anthropic as LLM providers
  */
 export class AgentCore {
-  private readonly mcpService: FeishuMcpService;
   private readonly systemPrompt: string;
   private readonly maxContextMessages: number;
   private readonly retrySleep?: (ms: number) => Promise<void>;
@@ -134,7 +130,6 @@ export class AgentCore {
   private tools: DynamicStructuredTool[] = [];
 
   constructor(options: AgentCoreOptions = {}) {
-    this.mcpService = options.mcpService ?? new FeishuMcpService();
     this.systemPrompt = options.systemPrompt ?? DEFAULT_SYSTEM_PROMPT;
     this.maxContextMessages = options.maxContextMessages ?? DEFAULT_MAX_CONTEXT_MESSAGES;
     this.retrySleep = options.retrySleep;
@@ -518,16 +513,13 @@ export class AgentCore {
     args: Record<string, unknown>,
   ): Promise<string> {
     try {
-      // Check if it's a registered LangChain tool
       const tool = this.tools.find((t) => t.name === toolName);
-      if (tool) {
-        const result = await tool.invoke(args);
-        return typeof result === 'string' ? result : JSON.stringify(result);
+      if (!tool) {
+        return `Error: tool "${toolName}" is not registered`;
       }
 
-      // Fall back to direct MCP call
-      const result = await this.mcpService.callTool(toolName, args);
-      return result.content.map((c) => c.text).join('\n');
+      const result = await tool.invoke(args);
+      return typeof result === 'string' ? result : JSON.stringify(result);
     } catch (err) {
       const error = AppError.from(err);
       return `Error executing tool "${toolName}": ${error.message}`;

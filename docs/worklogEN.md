@@ -393,3 +393,36 @@
   - **Fix**: use `query` function (doesn't check row count) instead of `insert` function
   - **Lesson**: `insert` function is only for INSERTs guaranteed to return rows; use `query` for `ON CONFLICT DO NOTHING`
 - Added task URL list appending in messageHandler (compromise: Claude replies naturally + code forcibly appends links)
+
+
+---
+
+## 2026-05-16 (Saturday)
+
+### What was done today
+
+- Completed code cleanup: removed `feishuMcp.ts` and `feishuAuth.ts` along with their test files
+  - **Reason**: `@larksuiteoapi/lark-mcp` is designed for MCP Server mode — tools have no callable handler and cannot be invoked directly in code. All Feishu operations have been unified to use `@larksuiteoapi/node-sdk` Client calling REST APIs directly. `FeishuAuthService` was only referenced by `FeishuMcpService`; the node-sdk Client manages authentication internally, so it's no longer needed either
+  - Deleted files: `src/services/feishuMcp.ts`, `src/services/feishuMcp.test.ts`, `src/services/feishuAuth.ts`, `src/services/feishuAuth.test.ts`
+  - Removed `@larksuiteoapi/lark-mcp` dependency from `package.json`
+- Cleaned up MCP remnants in `agentCore.ts`
+  - Removed `FeishuMcpService` import, field, and constructor parameter
+  - Removed MCP fallback path in `executeTool` (unregistered tools now return an error message directly instead of attempting MCP calls)
+- Cleaned up MCP remnants in `notification.ts`
+  - Removed `FeishuMcpService` import and field (actual message sending already uses node-sdk Client)
+  - Added `feishuClient` option for test injection
+- Fixed legacy issues in `taskManager.ts`
+  - `splitTask` method switched from MCP call to REST API (`client.task.v2.task.create()`)
+  - Removed reference to deleted `meeting_id` column in `splitTask`
+  - Removed stale `meetingId` filter condition in `listTasks`
+- Rewrote test files to match new architecture
+  - `agentCore.test.ts`: removed all MCP-related mocks, now mocks `@larksuiteoapi/node-sdk`; all 17 tests passing
+  - `notification.test.ts`: removed MCP mocks, now tests node-sdk Client calls; all 15 tests passing
+- Confirmed Task 17.1 is complete: `create_feishu_task` tool already calls `TaskManager.createTask()`, running the full flow (Feishu REST API + DB persistence + state initialization)
+- Full test suite results: 376 tests passing, 29 pre-existing failures (`taskManager.test.ts` missing config mock — belongs to Task 17.5 scope)
+
+### Architecture Decisions
+
+- **Final architecture confirmed**: AgentCore tool functions → Service layer (TaskManager / MeetingAnalyzer etc.) → node-sdk Client (Feishu REST API) + db.ts (PostgreSQL)
+- MCP has no place in the current architecture; `@larksuiteoapi/lark-mcp` fully removed
+- `feishuMcp.ts` and `feishuAuth.ts` were dead code and have been cleaned up

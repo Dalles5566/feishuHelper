@@ -389,3 +389,36 @@
   - **修复**：改用 `query` 函数（不检查返回行数）代替 `insert` 函数
   - **教训**：`insert` 函数只适合确定会返回行的 INSERT，带 `ON CONFLICT DO NOTHING` 的要用 `query`
 - 在 messageHandler 中追加任务 URL 列表到回复末尾（折中方案：Claude 正常回复 + 代码硬性追加链接）
+
+
+---
+
+## 2026-05-16（周六）
+
+### 今日完成内容
+
+- 完成代码清理：移除 `feishuMcp.ts` 和 `feishuAuth.ts` 及其测试文件
+  - **原因**：`@larksuiteoapi/lark-mcp` 是 MCP Server 模式设计的，工具没有 callable handler，不能在代码里直接调用。所有飞书操作已统一改用 `@larksuiteoapi/node-sdk` Client 直接调 REST API。`FeishuAuthService` 只被 `FeishuMcpService` 引用，node-sdk Client 内部自己管理认证，所以也不再需要
+  - 删除文件：`src/services/feishuMcp.ts`、`src/services/feishuMcp.test.ts`、`src/services/feishuAuth.ts`、`src/services/feishuAuth.test.ts`
+  - 从 `package.json` 移除 `@larksuiteoapi/lark-mcp` 依赖
+- 清理 `agentCore.ts` 中的 MCP 残留
+  - 移除 `FeishuMcpService` import、字段、构造函数参数
+  - 移除 `executeTool` 中的 MCP fallback 路径（不存在的工具现在直接返回错误信息，不再尝试调 MCP）
+- 清理 `notification.ts` 中的 MCP 残留
+  - 移除 `FeishuMcpService` import 和字段（实际发消息已经用 node-sdk Client）
+  - 新增 `feishuClient` 选项用于测试注入
+- 修复 `taskManager.ts` 中的遗留问题
+  - `splitTask` 方法从 MCP 调用改为 REST API（`client.task.v2.task.create()`）
+  - 移除 `splitTask` 中对已删除的 `meeting_id` 列的引用
+  - 移除 `listTasks` 中对已删除的 `meetingId` 过滤条件
+- 重写测试文件以匹配新架构
+  - `agentCore.test.ts`：移除所有 MCP 相关 mock，改为 mock `@larksuiteoapi/node-sdk`，17 个测试全部通过
+  - `notification.test.ts`：移除 MCP mock，改为测试 node-sdk Client 调用，15 个测试全部通过
+- 确认 Task 17.1 已完成：`create_feishu_task` 工具已经调用 `TaskManager.createTask()`，走完整流程（飞书 REST API + DB 持久化 + 状态初始化）
+- 全量测试结果：376 个测试通过，29 个预存失败（`taskManager.test.ts` 缺少 config mock，属于 Task 17.5 范围）
+
+### 架构决策
+
+- **最终架构确认**：AgentCore 工具函数 → Service 层（TaskManager / MeetingAnalyzer 等）→ node-sdk Client（飞书 REST API）+ db.ts（PostgreSQL）
+- MCP 在当前架构中没有位置，`@larksuiteoapi/lark-mcp` 完全移除
+- `feishuMcp.ts` 和 `feishuAuth.ts` 是废代码，已清理

@@ -3,14 +3,14 @@
  *
  * Tests cover:
  *   - Message formatting for all notification types
- *   - Successful notification sending via FeishuMcpService
+ *   - Successful notification sending via Feishu REST API (node-sdk)
  *   - Failure handling with queue retry
  *   - Edge cases (missing metadata, custom content)
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// Mock external dependencies that get pulled in transitively
+// Mock external dependencies
 vi.mock('../config/index.js', () => ({
   getConfig: () => ({
     feishu: { appId: 'test', appSecret: 'test', verificationToken: 'test', encryptKey: '' },
@@ -21,16 +21,18 @@ vi.mock('../config/index.js', () => ({
   }),
 }));
 
-vi.mock('@larksuiteoapi/lark-mcp', () => ({
-  LarkMcpTool: vi.fn().mockImplementation(() => ({
-    getTools: vi.fn().mockReturnValue([]),
-    updateUserAccessToken: vi.fn(),
-  })),
-}));
-
-vi.mock('./feishuAuth.js', () => ({
-  FeishuAuthService: vi.fn().mockImplementation(() => ({
-    getToken: vi.fn().mockResolvedValue('mock-token'),
+vi.mock('@larksuiteoapi/node-sdk', () => ({
+  Client: vi.fn().mockImplementation(() => ({
+    im: {
+      v1: {
+        message: {
+          create: vi.fn().mockResolvedValue({
+            code: 0,
+            data: { message_id: 'msg_123' },
+          }),
+        },
+      },
+    },
   })),
 }));
 
@@ -44,25 +46,23 @@ import {
   type SendNotificationParams,
   type NotificationServiceOptions,
 } from './notification.js';
-import type { McpToolCallResult } from './feishuMcp.js';
 
 // ---------------------------------------------------------------------------
-// Mocks
+// Helpers
 // ---------------------------------------------------------------------------
 
-function createMockMcpService(callToolResult?: McpToolCallResult, shouldThrow?: Error) {
+function createMockFeishuClient(shouldThrow = false) {
   return {
-    callTool: vi.fn().mockImplementation(async () => {
-      if (shouldThrow) throw shouldThrow;
-      return (
-        callToolResult ?? {
-          isError: false,
-          content: [{ type: 'text', text: JSON.stringify({ data: { message_id: 'msg_123' } }) }],
-        }
-      );
-    }),
-    callToolWithToken: vi.fn(),
-    getAvailableTools: vi.fn().mockReturnValue([]),
+    im: {
+      v1: {
+        message: {
+          create: vi.fn().mockImplementation(async () => {
+            if (shouldThrow) throw new Error('Network timeout');
+            return { code: 0, data: { message_id: 'msg_123' } };
+          }),
+        },
+      },
+    },
   } as any;
 }
 
@@ -75,21 +75,20 @@ function createMockAddJobFn(shouldThrow = false) {
 
 function createService(
   options: {
-    callToolResult?: McpToolCallResult;
-    callToolError?: Error;
+    clientShouldThrow?: boolean;
     addJobShouldThrow?: boolean;
   } = {},
-): { service: NotificationService; mcpService: any; addJobFn: any } {
-  const mcpService = createMockMcpService(options.callToolResult, options.callToolError);
+): { service: NotificationService; feishuClient: any; addJobFn: any } {
+  const feishuClient = createMockFeishuClient(options.clientShouldThrow);
   const addJobFn = createMockAddJobFn(options.addJobShouldThrow);
 
   const serviceOptions: NotificationServiceOptions = {
-    mcpService,
+    feishuClient,
     addJobFn,
   };
 
   const service = new NotificationService(serviceOptions);
-  return { service, mcpService, addJobFn };
+  return { service, feishuClient, addJobFn };
 }
 
 // ---------------------------------------------------------------------------
@@ -214,8 +213,8 @@ describe('formatNotificationMessage', () => {
 
 describe('NotificationService', () => {
   describe('sendNotification - success', () => {
-    it('should send notification via MCP and return success', async () => {
-      const { service, mcpService } = createService();
+    it('should send notification via Feishu REST API and return success', async () => {
+      const { service, feishuClient } = createService();
 
       const params: SendNotificationParams = {
         type: 'task_assigned',
@@ -227,16 +226,18 @@ describe('NotificationService', () => {
 
       expect(result.success).toBe(true);
       expect(result.messageId).toBe('msg_123');
-      expect(mcpService.callTool).toHaveBeenCalledWith('im_send_message', {
-        receive_id_type: 'user_id',
-        receive_id: 'user_001',
-        msg_type: 'text',
-        content: expect.any(String),
+      expect(feishuClient.im.v1.message.create).toHaveBeenCalledWith({
+        params: { receive_id_type: 'open_id' },
+        data: {
+          receive_id: 'user_001',
+          msg_type: 'text',
+          content: expect.any(String),
+        },
       });
     });
 
     it('should use chat_id when chatId is provided', async () => {
-      const { service, mcpService } = createService();
+      const { service, feishuClient } = createService();
 
       const params: SendNotificationParams = {
         type: 'state_changed',
@@ -248,16 +249,18 @@ describe('NotificationService', () => {
       const result = await service.sendNotification(params);
 
       expect(result.success).toBe(true);
-      expect(mcpService.callTool).toHaveBeenCalledWith('im_send_message', {
-        receive_id_type: 'chat_id',
-        receive_id: 'oc_chat_123',
-        msg_type: 'text',
-        content: expect.any(String),
+      expect(feishuClient.im.v1.message.create).toHaveBeenCalledWith({
+        params: { receive_id_type: 'chat_id' },
+        data: {
+          receive_id: 'oc_chat_123',
+          msg_type: 'text',
+          content: expect.any(String),
+        },
       });
     });
 
     it('should use explicit content when provided', async () => {
-      const { service, mcpService } = createService();
+      const { service, feishuClient } = createService();
 
       const params: SendNotificationParams = {
         type: 'task_assigned',
@@ -268,54 +271,16 @@ describe('NotificationService', () => {
       const result = await service.sendNotification(params);
 
       expect(result.success).toBe(true);
-      const callArgs = mcpService.callTool.mock.calls[0][1];
-      const parsedContent = JSON.parse(callArgs.content);
+      const callArgs = feishuClient.im.v1.message.create.mock.calls[0][0];
+      const parsedContent = JSON.parse(callArgs.data.content);
       expect(parsedContent.text).toBe('Hello, you have a new task!');
-    });
-
-    it('should handle response without message_id gracefully', async () => {
-      const { service } = createService({
-        callToolResult: {
-          isError: false,
-          content: [{ type: 'text', text: '{}' }],
-        },
-      });
-
-      const params: SendNotificationParams = {
-        type: 'task_assigned',
-        recipientId: 'user_001',
-      };
-
-      const result = await service.sendNotification(params);
-
-      expect(result.success).toBe(true);
-      expect(result.messageId).toBeUndefined();
-    });
-
-    it('should handle non-JSON response content gracefully', async () => {
-      const { service } = createService({
-        callToolResult: {
-          isError: false,
-          content: [{ type: 'text', text: 'not json' }],
-        },
-      });
-
-      const params: SendNotificationParams = {
-        type: 'task_assigned',
-        recipientId: 'user_001',
-      };
-
-      const result = await service.sendNotification(params);
-
-      expect(result.success).toBe(true);
-      expect(result.messageId).toBeUndefined();
     });
   });
 
   describe('sendNotification - failure and retry', () => {
-    it('should re-queue notification on MCP failure', async () => {
+    it('should re-queue notification on API failure', async () => {
       const { service, addJobFn } = createService({
-        callToolError: new Error('Network timeout'),
+        clientShouldThrow: true,
       });
 
       const params: SendNotificationParams = {
@@ -340,7 +305,7 @@ describe('NotificationService', () => {
 
     it('should report requeued=false when re-queuing also fails', async () => {
       const { service, addJobFn } = createService({
-        callToolError: new Error('MCP down'),
+        clientShouldThrow: true,
         addJobShouldThrow: true,
       });
 
@@ -352,108 +317,9 @@ describe('NotificationService', () => {
       const result = await service.sendNotification(params);
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain('MCP down');
+      expect(result.error).toContain('Network timeout');
       expect(result.requeued).toBe(false);
       expect(addJobFn).toHaveBeenCalled();
-    });
-
-    it('should include AppError message in error field', async () => {
-      const { AppError } = await import('../utils/errors.js');
-      const appError = AppError.feishuApi(
-        'FEISHU_API_TIMEOUT',
-        'Request timed out after 30s',
-      );
-
-      const { service } = createService({
-        callToolError: appError,
-      });
-
-      const params: SendNotificationParams = {
-        type: 'verification_result',
-        recipientId: 'user_004',
-        metadata: { taskTitle: 'Task', status: 'passed' },
-      };
-
-      const result = await service.sendNotification(params);
-
-      expect(result.success).toBe(false);
-      expect(result.error).toBe('Request timed out after 30s');
-      expect(result.requeued).toBe(true);
-    });
-  });
-
-  describe('sendNotification - all notification types', () => {
-    it('should send task_assigned notification', async () => {
-      const { service, mcpService } = createService();
-
-      await service.sendNotification({
-        type: 'task_assigned',
-        recipientId: 'user_001',
-        metadata: { taskTitle: 'Build API', taskId: 'T-100', assignedBy: 'PM' },
-      });
-
-      const callArgs = mcpService.callTool.mock.calls[0][1];
-      const parsedContent = JSON.parse(callArgs.content);
-      expect(parsedContent.text).toContain('New Task Assigned');
-      expect(parsedContent.text).toContain('Build API');
-    });
-
-    it('should send state_changed notification', async () => {
-      const { service, mcpService } = createService();
-
-      await service.sendNotification({
-        type: 'state_changed',
-        recipientId: 'user_001',
-        metadata: {
-          taskTitle: 'Deploy',
-          fromState: 'QAPending',
-          toState: 'QAPassed',
-        },
-      });
-
-      const callArgs = mcpService.callTool.mock.calls[0][1];
-      const parsedContent = JSON.parse(callArgs.content);
-      expect(parsedContent.text).toContain('Task State Changed');
-      expect(parsedContent.text).toContain('QAPending');
-      expect(parsedContent.text).toContain('QAPassed');
-    });
-
-    it('should send requirement_updated notification', async () => {
-      const { service, mcpService } = createService();
-
-      await service.sendNotification({
-        type: 'requirement_updated',
-        recipientId: 'user_001',
-        metadata: {
-          taskTitle: 'Search Feature',
-          meetingTitle: 'Sprint Review',
-          changes: 'Added filter support',
-        },
-      });
-
-      const callArgs = mcpService.callTool.mock.calls[0][1];
-      const parsedContent = JSON.parse(callArgs.content);
-      expect(parsedContent.text).toContain('Requirement Updated');
-      expect(parsedContent.text).toContain('Added filter support');
-    });
-
-    it('should send verification_result notification', async () => {
-      const { service, mcpService } = createService();
-
-      await service.sendNotification({
-        type: 'verification_result',
-        recipientId: 'user_001',
-        metadata: {
-          taskTitle: 'Auth Module',
-          status: 'passed',
-          matchScore: 88,
-        },
-      });
-
-      const callArgs = mcpService.callTool.mock.calls[0][1];
-      const parsedContent = JSON.parse(callArgs.content);
-      expect(parsedContent.text).toContain('✅');
-      expect(parsedContent.text).toContain('88/100');
     });
   });
 });

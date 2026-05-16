@@ -15,8 +15,7 @@
 
 // @ts-ignore — node-sdk ships CJS
 import { Client } from '@larksuiteoapi/node-sdk';
-import { FeishuMcpService } from './feishuMcp.js';
-import { AppError, FeishuErrorCodes } from '../utils/errors.js';
+import { AppError } from '../utils/errors.js';
 import { addNotificationJob, type NotificationJobData } from '../queue/index.js';
 import { getConfig } from '../config/index.js';
 
@@ -59,10 +58,10 @@ export interface NotificationResult {
 
 /** Options for creating a NotificationService instance. */
 export interface NotificationServiceOptions {
-  /** Override the FeishuMcpService instance (useful for testing). */
-  mcpService?: FeishuMcpService;
   /** Override the addNotificationJob function (useful for testing). */
   addJobFn?: typeof addNotificationJob;
+  /** Override the Feishu Client instance (useful for testing). */
+  feishuClient?: InstanceType<typeof Client>;
 }
 
 // ---------------------------------------------------------------------------
@@ -126,19 +125,21 @@ export function formatNotificationMessage(
  * for retry with exponential backoff.
  */
 export class NotificationService {
-  private readonly mcpService: FeishuMcpService;
   private readonly addJobFn: typeof addNotificationJob;
   private readonly client: InstanceType<typeof Client>;
 
   constructor(options: NotificationServiceOptions = {}) {
-    this.mcpService = options.mcpService ?? new FeishuMcpService();
     this.addJobFn = options.addJobFn ?? addNotificationJob;
 
-    const config = getConfig();
-    this.client = new Client({
-      appId: config.feishu.appId,
-      appSecret: config.feishu.appSecret,
-    });
+    if (options.feishuClient) {
+      this.client = options.feishuClient;
+    } else {
+      const config = getConfig();
+      this.client = new Client({
+        appId: config.feishu.appId,
+        appSecret: config.feishu.appSecret,
+      });
+    }
   }
 
   /**
