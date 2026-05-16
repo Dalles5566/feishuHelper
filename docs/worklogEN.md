@@ -479,3 +479,12 @@
   - Description format is LLM-controlled (summary + key points + change history); code only stores and syncs as-is
   - System prompt explicitly requires LLM to follow format spec when updating descriptions, preserving existing content and only appending to change history
   - Removed code-level history concatenation logic to avoid duplication
+
+- `assign_task` tool improvements
+  - Added optional `reason` parameter for tracking assignment/reassignment reasons
+  - Personnel changes are written to `description_history` for change tracking
+  - Syncs to Feishu: calls `addMembers` API to add person as task assignee
+- Investigated Feishu task change event subscription
+  - Found that Feishu's "activity subscription" is tasklist-based, pushes to chat groups, not to app backend
+  - Feishu currently has no task-level change webhook events
+  - Pending: considering Plan B (read-time sync: fetch latest state from Feishu API before each operation)

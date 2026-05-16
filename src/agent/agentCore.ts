@@ -667,17 +667,18 @@ export class AgentCore {
       // Tool 5: Assign task to a person
       new DynamicStructuredTool({
         name: 'assign_task',
-        description: 'Assign a task to a developer. Use query_sql to look up the employee open_id first if you only have a name.',
+        description: 'Assign a task to a developer. This updates the local DB, writes an assignment record, and syncs to Feishu (adds the person as task member). Use query_sql to look up the employee open_id from their name first.',
         schema: z.object({
           task_id: z.string().describe('The task ID (UUID) or display_id (e.g. F-000001) to assign'),
           assignee_open_id: z.string().describe('The Feishu open_id of the person (look up from employees table via query_sql)'),
-          assignee_name: z.string().describe('The name of the person being assigned (for record keeping)'),
+          assignee_name: z.string().describe('The name of the person being assigned'),
+          reason: z.string().optional().describe('Reason for the assignment or reassignment'),
         }),
-        func: async ({ task_id, assignee_open_id, assignee_name }) => {
+        func: async ({ task_id, assignee_open_id, assignee_name, reason }) => {
           try {
             const { queryOne, update: dbUpdate } = await import('../utils/db.js');
 
-            // Resolve task_id if it's a display_id
+            // Resolve display_id to UUID
             let resolvedTaskId = task_id;
             if (/^[FB]-\d{6}$/.test(task_id)) {
               const row = await queryOne<any>(
@@ -704,7 +705,43 @@ export class AgentCore {
               assignedBy: 'agent',
             });
 
-            return `✅ 任务已分配给 ${assignee_name}\n任务: ${task_id}`;
+            // Append to description_history for tracking
+            const taskRow = await queryOne<any>(
+              'SELECT feishu_task_id, description_history FROM tasks WHERE id = $1',
+              [resolvedTaskId],
+            );
+            const history = Array.isArray(taskRow?.description_history)
+              ? taskRow.description_history
+              : JSON.parse(taskRow?.description_history || '[]');
+            history.push({
+              previousDescription: '',
+              newDescription: '',
+              reason: reason || `分配给 ${assignee_name}`,
+              updatedBy: 'agent',
+              updatedAt: new Date().toISOString(),
+            });
+            await dbUpdate(
+              `UPDATE tasks SET description_history = $1 WHERE id = $2`,
+              [JSON.stringify(history), resolvedTaskId],
+            );
+
+            // Sync to Feishu: add member to task
+            if (taskRow?.feishu_task_id) {
+              try {
+                await feishuClient.task.v2.task.addMembers({
+                  path: { task_guid: taskRow.feishu_task_id },
+                  params: { user_id_type: 'open_id' },
+                  data: {
+                    members: [{ type: 'user', id: assignee_open_id, role: 'assignee' }],
+                  },
+                });
+              } catch (feishuErr) {
+                const errMsg = feishuErr instanceof Error ? feishuErr.message : String(feishuErr);
+                console.error(`[assign_task] Feishu sync failed: ${errMsg}`);
+              }
+            }
+
+            return `✅ 任务已分配给 ${assignee_name}\n任务: ${task_id}${reason ? `\n原因: ${reason}` : ''}`;
           } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
             return `❌ 分配任务失败: ${msg}`;
