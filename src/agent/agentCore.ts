@@ -448,6 +448,7 @@ export class AgentCore {
               priority: 'medium',
               sourceActionItemId: `agent-${Date.now()}`,
               taskType: task_type || 'feature',
+              dueDate: due_date,
             });
 
             // Link task to meeting if meeting_id provided

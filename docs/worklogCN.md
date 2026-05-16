@@ -437,3 +437,8 @@
 - 合并 3 个 migration 文件为单一 `migrations/schema.sql`
 - 更新 Task model 新增 `displayId` 和 `taskType` 字段
 - 回填旧任务的 display_id（F-000001 到 F-000012）
+
+- 修复飞书任务创建时缺少截止日期的问题
+  - `TaskCreateParams` 新增 `dueDate` 字段（YYYY-MM-DD 格式）
+  - `TaskManager.createTask()` 将 dueDate 转为飞书 API 要求的格式（毫秒时间戳 + `is_all_day: true`）
+  - AgentCore 的 `create_feishu_task` 工具将 `due_date` 参数传递给 TaskManager

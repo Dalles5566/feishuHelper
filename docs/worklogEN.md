@@ -441,3 +441,8 @@
 - Consolidated 3 migration files into single `migrations/schema.sql`
 - Updated Task model with `displayId` and `taskType` fields
 - Backfilled existing tasks with display_id (F-000001 through F-000012)
+
+- Fixed missing due date when creating Feishu tasks
+  - Added `dueDate` field to `TaskCreateParams` (YYYY-MM-DD format)
+  - `TaskManager.createTask()` converts dueDate to Feishu API format (millisecond timestamp + `is_all_day: true`)
+  - AgentCore's `create_feishu_task` tool now passes `due_date` parameter to TaskManager

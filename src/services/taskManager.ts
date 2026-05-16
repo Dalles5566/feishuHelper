@@ -136,17 +136,30 @@ export class TaskManager {
     // Step 2: Create task in Feishu via REST API (title includes display_id)
     const feishuTaskId = await withRetry(
       async () => {
+        const data: Record<string, unknown> = {
+          summary: feishuTitle,
+          description: params.description,
+          members: [{
+            type: 'user',
+            id: 'ou_371598589222259055562993853b8df0',
+            role: 'assignee',
+          }],
+        };
+
+        // Add due date if provided (YYYY-MM-DD → millisecond timestamp, all-day)
+        if (params.dueDate) {
+          const dueTimestamp = new Date(params.dueDate + 'T00:00:00Z').getTime();
+          if (!isNaN(dueTimestamp)) {
+            data.due = {
+              timestamp: String(dueTimestamp),
+              is_all_day: true,
+            };
+          }
+        }
+
         const response = await this.feishuClient.task.v2.task.create({
           params: { user_id_type: 'open_id' },
-          data: {
-            summary: feishuTitle,
-            description: params.description,
-            members: [{
-              type: 'user',
-              id: 'ou_371598589222259055562993853b8df0',
-              role: 'assignee',
-            }],
-          },
+          data,
         });
 
         if ((response as any)?.code !== 0) {

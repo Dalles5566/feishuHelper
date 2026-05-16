@@ -119,6 +119,8 @@ export interface TaskCreateParams {
   sourceActionItemId: string;
   /** Task type: 'feature' or 'bugfix'. Defaults to 'feature'. */
   taskType?: 'feature' | 'bugfix';
+  /** Due date in YYYY-MM-DD format. Optional. */
+  dueDate?: string;
 }
 
 /**
