@@ -110,9 +110,9 @@ export class TaskManager {
       `INSERT INTO tasks (
         title, description, acceptance_criteria, dependencies,
         priority, state, source_action_item_id,
-        retry_count, description_history, task_type, display_id, assignee_id
+        retry_count, description_history, task_type, display_id, assignee_id, due_date
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
-        $11 || LPAD(nextval('task_display_id_seq')::text, 6, '0'), $12
+        $11 || LPAD(nextval('task_display_id_seq')::text, 6, '0'), $12, $13
       )
       RETURNING *`,
       [
@@ -128,6 +128,7 @@ export class TaskManager {
         taskType,
         prefix,
         params.assigneeId || null,
+        params.dueDate || null,
       ],
     );
 

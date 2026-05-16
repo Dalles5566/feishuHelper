@@ -460,3 +460,15 @@
   - `TaskManager.createTask()`: removed hardcoded open_id, now accepts optional assigneeId param
 - Updated system prompt: informs LLM about employees table structure and lookup workflow
 - Design philosophy: let LLM orchestrate multi-step queries (lookup person → query tasks) instead of code doing it implicitly
+
+- Added `query_sql` general-purpose read-only query tool, replacing `list_tasks`, `get_task`, `lookup_employee`
+  - LLM can freely write SELECT queries against any table (tasks, employees, meetings, etc.)
+  - Security: only SELECT allowed; rejects INSERT/UPDATE/DELETE/DROP keywords
+  - Results capped at 20 rows to prevent token explosion
+  - System prompt includes full database schema so LLM knows all tables and columns
+- Simplified tool set to 6: analyze_meeting, query_sql, create_feishu_task, update_task, assign_task, complete_task
+- `create_feishu_task` tool improvements
+  - Added `acceptance_criteria`, `dependencies`, `priority`, `assignee_open_id` fields
+  - Removed internal query code — LLM uses query_sql to look up data before calling this tool
+- Added `due_date` column to tasks table; now persisted to both local DB and Feishu API
+- Design philosophy: queries are fully AI-driven (query_sql), mutations go through controlled specialized tools

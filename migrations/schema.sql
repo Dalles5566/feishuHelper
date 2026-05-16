@@ -44,6 +44,7 @@ CREATE TABLE IF NOT EXISTS tasks (
   parent_task_id UUID REFERENCES tasks(id),
   source_action_item_id VARCHAR(100),
   feishu_task_id VARCHAR(100),
+  due_date DATE,
   retry_count INTEGER NOT NULL DEFAULT 0,
   failure_context TEXT,
   description_history JSONB NOT NULL DEFAULT '[]',

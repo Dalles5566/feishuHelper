@@ -81,18 +81,27 @@ const DEFAULT_SYSTEM_PROMPT = `You are Feishu Helper, an AI assistant that autom
 
 Your core capabilities:
 1. **Analyze meeting minutes**: When a user sends meeting content or conversation records, you MUST first call the analyze_meeting tool to get structured analysis results.
-2. **Create tasks**: After analyzing meeting content, create a task for each action item using create_feishu_task. Also use this tool when the user directly asks to create a task.
-3. **Query tasks**: Use list_tasks to show task lists, or get_task to show details of a specific task.
+2. **Query any data**: Use query_sql to run SELECT queries against the database. You can look up tasks, employees, meetings, assignments — anything.
+3. **Create tasks**: After analyzing meeting content, create a task for each action item using create_feishu_task. Also use this tool when the user directly asks to create a task.
 4. **Update tasks**: Use update_task to modify task descriptions when requirements change.
-5. **Assign tasks**: Use assign_task to assign a task to a developer.
+5. **Assign tasks**: Use assign_task to assign a task to a developer (requires open_id — look it up via query_sql first).
 6. **Complete tasks**: Use complete_task to mark a task as done.
-7. **Look up employees**: Use lookup_employee to find a person's open_id by name. You need the open_id to assign tasks or filter tasks by assignee.
-8. **Reply in Chinese** unless the user writes in English.
+7. **Reply in Chinese** unless the user writes in English.
 
 DATABASE CONTEXT:
 - The "employees" table maps names to Feishu open_ids. Columns: open_id, name, status (active/on_leave/inactive).
 - The "tasks" table stores assignee_id as a Feishu open_id (not a name).
 - When the user mentions a person by name, FIRST call lookup_employee to get their open_id, THEN use that open_id in list_tasks or assign_task.
+- You have a query_sql tool for any read-only query. Here is the full database schema:
+  - employees(id UUID, open_id, name, status, created_at, updated_at)
+  - tasks(id UUID, display_id, task_type, title, description, acceptance_criteria JSONB, dependencies JSONB, priority, state, assignee_id, parent_task_id, source_action_item_id, feishu_task_id, retry_count, failure_context, description_history JSONB, created_at, updated_at)
+  - meetings(id UUID, title, meeting_date, feishu_doc_id, raw_content, analysis JSONB, created_at)
+  - task_meetings(id UUID, task_id, meeting_id, created_at)
+  - workflow_logs(id UUID, task_id, from_state, to_state, trigger, actor, reason, metadata JSONB, timestamp)
+  - task_assignments(id UUID, task_id, assignee_id, assignee_name, assigned_by, assigned_at, status)
+  - verification_reports(id UUID, task_id, report JSONB, code_context JSONB, created_at)
+  - qa_feedbacks(id UUID, task_id, result, failure_type, details, test_case_results JSONB, reported_by, reported_at)
+  - documents(id UUID, title, doc_type, content, sections JSONB, version, related_task_id, feishu_doc_id, created_at, updated_at)
 
 WORKFLOW for meeting content:
 1. Call analyze_meeting with the meeting content — this saves the meeting to DB and returns a meetingId
@@ -427,50 +436,81 @@ export class AgentCore {
         },
       }),
 
-      // Tool 2: Create a task in Feishu
+      // Tool 2: Read-only SQL query
+      new DynamicStructuredTool({
+        name: 'query_sql',
+        description: 'Execute a read-only SQL SELECT query against the database. Use this for ANY data lookup: finding tasks, checking assignees, counting items, looking up employees, etc. ONLY SELECT statements are allowed — no INSERT, UPDATE, DELETE, DROP, ALTER, etc.',
+        schema: z.object({
+          sql: z.string().describe('The SQL SELECT query to execute. Must start with SELECT.'),
+        }),
+        func: async ({ sql }) => {
+          try {
+            // Security: only allow SELECT statements
+            const trimmed = sql.trim().toUpperCase();
+            if (!trimmed.startsWith('SELECT')) {
+              return '❌ 只允许 SELECT 查询。增删改请使用对应的专用工具。';
+            }
+
+            // Block dangerous keywords even in SELECT (subqueries with mutations)
+            const forbidden = ['INSERT', 'UPDATE', 'DELETE', 'DROP', 'ALTER', 'TRUNCATE', 'CREATE', 'GRANT', 'REVOKE'];
+            for (const keyword of forbidden) {
+              if (trimmed.includes(keyword)) {
+                return `❌ SQL 中包含不允许的关键字: ${keyword}`;
+              }
+            }
+
+            const { query: dbQuery } = await import('../utils/db.js');
+            const result = await dbQuery<any>(sql, []);
+
+            if (result.rows.length === 0) {
+              return '查询结果为空。';
+            }
+
+            // Limit output to avoid token explosion
+            const maxRows = 20;
+            const rows = result.rows.slice(0, maxRows);
+            const output = JSON.stringify(rows, null, 2);
+
+            return result.rows.length > maxRows
+              ? `${output}\n\n... 共 ${result.rows.length} 行，仅显示前 ${maxRows} 行。`
+              : output;
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            return `❌ SQL 查询失败: ${msg}`;
+          }
+        },
+      }),
+
+      // Tool 3: Create a task in Feishu
       new DynamicStructuredTool({
         name: 'create_feishu_task',
-        description: 'Create a task in Feishu. Use this after analyzing meeting content for each action item, or when the user directly asks to create a task.',
+        description: 'Create a task in Feishu. Use this after analyzing meeting content for each action item, or when the user directly asks to create a task. If assigning to someone, use query_sql to look up their open_id first.',
         schema: z.object({
           summary: z.string().describe('Task title/summary'),
           description: z.string().optional().describe('Task description with context'),
-          due_date: z.string().optional().describe('Due date in YYYY-MM-DD format, e.g. 2026-05-25. Leave empty if no due date.'),
-          meeting_id: z.string().optional().describe('The meeting ID returned by analyze_meeting. Pass this to link the task to the meeting.'),
-          task_type: z.enum(['feature', 'bugfix']).optional().describe('Task type: "feature" for new features (prefix F-), "bugfix" for bug fixes (prefix B-). Defaults to "feature".'),
-          assignee: z.string().optional().describe('Name of the person to assign this task to. Must match a name in the employees table. Leave empty if not assigning yet.'),
+          due_date: z.string().optional().describe('Due date in YYYY-MM-DD format, e.g. 2026-05-25'),
+          meeting_id: z.string().optional().describe('The meeting ID returned by analyze_meeting, to link the task to the meeting'),
+          task_type: z.enum(['feature', 'bugfix']).optional().describe('Task type: "feature" (prefix F-) or "bugfix" (prefix B-). Defaults to "feature"'),
+          priority: z.enum(['high', 'medium', 'low']).optional().describe('Task priority. Defaults to "medium"'),
+          assignee_open_id: z.string().optional().describe('Feishu open_id of the assignee. Look up via query_sql from employees table if needed'),
+          acceptance_criteria: z.array(z.string()).optional().describe('List of acceptance criteria for the task. Extract from meeting analysis action items.'),
+          dependencies: z.array(z.string()).optional().describe('List of task dependencies (other task display_ids or descriptions). Extract from meeting analysis.'),
         }),
-        func: async ({ summary, description, due_date, meeting_id, task_type, assignee }) => {
+        func: async ({ summary, description, due_date, meeting_id, task_type, priority, assignee_open_id, acceptance_criteria, dependencies }) => {
           try {
-            console.log(`[AgentCore] Creating task: "${summary}", type: ${task_type || 'feature'}, due: ${due_date || 'none'}, assignee: ${assignee || 'none'}`);
-
-            // Look up assignee open_id from employees table if name provided
-            let assigneeOpenId: string | undefined;
-            if (assignee) {
-              const { queryOne } = await import('../utils/db.js');
-              const employee = await queryOne<any>(
-                `SELECT open_id FROM employees WHERE name = $1 AND status = 'active'`,
-                [assignee],
-              );
-              if (!employee) {
-                return `❌ 找不到员工: "${assignee}"。请确认名字是否正确，或者该员工是否在职。`;
-              }
-              assigneeOpenId = employee.open_id;
-            }
-
-            // Use TaskManager for full flow (Feishu API + DB persistence)
             const { TaskManager } = await import('../services/taskManager.js');
             const taskManager = new TaskManager({ feishuClient });
 
             const task = await taskManager.createTask({
               title: summary,
               description: description || '',
-              acceptanceCriteria: [],
-              dependencies: [],
-              priority: 'medium',
+              acceptanceCriteria: acceptance_criteria || [],
+              dependencies: dependencies || [],
+              priority: priority || 'medium',
               sourceActionItemId: `agent-${Date.now()}`,
               taskType: task_type || 'feature',
               dueDate: due_date,
-              assigneeId: assigneeOpenId,
+              assigneeId: assignee_open_id,
             });
 
             // Link task to meeting if meeting_id provided
@@ -482,125 +522,16 @@ export class AgentCore {
               );
             }
 
-            console.log(`[AgentCore] Task created: ${task.displayId} (${task.id}), feishu: ${task.feishuTaskId}`);
-
             const taskUrl = `https://applink.feishu.cn/client/todo/detail?guid=${task.feishuTaskId}`;
-            return `✅ 任务创建成功！\n编号: ${task.displayId}\n标题: ${summary}${assignee ? `\n分配给: ${assignee}` : ''}\n链接: ${taskUrl}`;
+            return `✅ 任务创建成功！\n编号: ${task.displayId}\n标题: ${summary}\n优先级: ${task.priority}\n链接: ${taskUrl}`;
           } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
-            console.error(`[AgentCore] Task creation failed:`, msg);
             return `❌ 任务创建失败: ${msg}`;
           }
         },
       }),
 
-      // Tool 3: List tasks
-      new DynamicStructuredTool({
-        name: 'list_tasks',
-        description: 'List tasks from the database with optional filters. Use this when the user asks about their tasks, task status, or wants to see what tasks exist. The assignee filter requires an open_id — use lookup_employee first to get it from a name.',
-        schema: z.object({
-          state: z.string().optional().describe('Filter by task state: Created, Assigned, InDevelopment, VerificationPending, VerificationPassed, VerificationFailed, QAPending, QAPassed, QAFailed, DocumentationUpdated, Completed'),
-          priority: z.string().optional().describe('Filter by priority: high, medium, low'),
-          assignee: z.string().optional().describe('Filter by assignee open_id (e.g. "ou_371598..."). Use lookup_employee to get this from a name.'),
-        }),
-        func: async ({ state, priority, assignee }) => {
-          try {
-            const { TaskManager } = await import('../services/taskManager.js');
-            const taskManager = new TaskManager({ feishuClient });
-
-            const filter: Record<string, unknown> = {};
-            if (state) filter.state = state;
-            if (priority) filter.priority = priority;
-            if (assignee) filter.assignee = assignee;
-
-            const tasks = await taskManager.listTasks(filter as any);
-
-            if (tasks.length === 0) {
-              return '没有找到匹配的任务。';
-            }
-
-            // Look up assignee names for display
-            const { query: dbQuery } = await import('../utils/db.js');
-            const employeesResult = await dbQuery<any>(
-              `SELECT open_id, name FROM employees`,
-              [],
-            );
-            const nameMap = new Map(employeesResult.rows.map((e: any) => [e.open_id, e.name]));
-
-            const taskList = tasks.map((t, i) => {
-              const url = t.feishuTaskId
-                ? `https://applink.feishu.cn/client/todo/detail?guid=${t.feishuTaskId}`
-                : '';
-              const assigneeName = t.assignee ? (nameMap.get(t.assignee) || t.assignee) : '未分配';
-              return `${i + 1}. ${t.displayId} [${t.state}] ${t.title} (${assigneeName})${url ? `\n   链接: ${url}` : ''}`;
-            }).join('\n');
-
-            return `找到 ${tasks.length} 个任务：\n${taskList}`;
-          } catch (err) {
-            const msg = err instanceof Error ? err.message : String(err);
-            return `❌ 查询任务失败: ${msg}`;
-          }
-        },
-      }),
-
-      // Tool 4: Get task details
-      new DynamicStructuredTool({
-        name: 'get_task',
-        description: 'Get detailed information about a specific task by its ID or human-readable ID (e.g. F-000001). Use this when the user asks about a specific task status or details.',
-        schema: z.object({
-          task_id: z.string().describe('The task ID (UUID) or human-readable ID (e.g. F-000001, B-000002) to look up'),
-        }),
-        func: async ({ task_id }) => {
-          try {
-            const { TaskManager } = await import('../services/taskManager.js');
-            const taskManager = new TaskManager({ feishuClient });
-
-            let task;
-            // Check if it's a human-readable ID (starts with F- or B-)
-            if (/^[FB]-\d{6}$/.test(task_id)) {
-              const { queryOne } = await import('../utils/db.js');
-              const row = await queryOne<any>(
-                'SELECT * FROM tasks WHERE display_id = $1',
-                [task_id],
-              );
-              if (row) {
-                task = await taskManager.getTask(row.id);
-              }
-            } else {
-              task = await taskManager.getTask(task_id);
-            }
-
-            if (!task) {
-              return `❌ 任务不存在: ${task_id}`;
-            }
-
-            const url = task.feishuTaskId
-              ? `https://applink.feishu.cn/client/todo/detail?guid=${task.feishuTaskId}`
-              : '无';
-
-            return [
-              `📋 任务详情`,
-              `编号: ${task.displayId}`,
-              `标题: ${task.title}`,
-              `类型: ${task.taskType === 'bugfix' ? 'Bug修复' : '新功能'}`,
-              `状态: ${task.state}`,
-              `优先级: ${task.priority}`,
-              `描述: ${task.description}`,
-              `分配给: ${task.assignee || '未分配'}`,
-              `重试次数: ${task.retryCount}`,
-              `飞书链接: ${url}`,
-              `创建时间: ${task.createdAt}`,
-              `更新时间: ${task.updatedAt}`,
-              task.failureContext ? `失败原因: ${task.failureContext}` : '',
-            ].filter(Boolean).join('\n');
-          } catch (err) {
-            const msg = err instanceof Error ? err.message : String(err);
-            return `❌ 查询任务失败: ${msg}`;
-          }
-        },
-      }),
-
-      // Tool 5: Update task description/title
+      // Tool 4: Update task description/title
       new DynamicStructuredTool({
         name: 'update_task',
         description: 'Update a task description or title. Use this when the user wants to modify task details based on new information or meeting updates.',
@@ -623,13 +554,13 @@ export class AgentCore {
         },
       }),
 
-      // Tool 6: Assign task to a person
+      // Tool 5: Assign task to a person
       new DynamicStructuredTool({
         name: 'assign_task',
-        description: 'Assign a task to a developer by their open_id. Use lookup_employee first to get the open_id from a name.',
+        description: 'Assign a task to a developer. Use query_sql to look up the employee open_id first if you only have a name.',
         schema: z.object({
           task_id: z.string().describe('The task ID (UUID) or display_id (e.g. F-000001) to assign'),
-          assignee_open_id: z.string().describe('The Feishu open_id of the person (get this from lookup_employee)'),
+          assignee_open_id: z.string().describe('The Feishu open_id of the person (look up from employees table via query_sql)'),
           assignee_name: z.string().describe('The name of the person being assigned (for record keeping)'),
         }),
         func: async ({ task_id, assignee_open_id, assignee_name }) => {
@@ -671,7 +602,7 @@ export class AgentCore {
         },
       }),
 
-      // Tool 7: Complete a task (mark as done)
+      // Tool 6: Complete a task (mark as done)
       new DynamicStructuredTool({
         name: 'complete_task',
         description: 'Mark a task as completed. Use this when the user says a task is done or wants to close a task.',
@@ -688,49 +619,6 @@ export class AgentCore {
           } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
             return `❌ 完成任务失败: ${msg}`;
-          }
-        },
-      }),
-
-      // Tool 8: Look up employee by name
-      new DynamicStructuredTool({
-        name: 'lookup_employee',
-        description: 'Look up an employee by name to get their open_id. Use this BEFORE calling list_tasks with assignee filter or assign_task. Returns the open_id needed for those tools.',
-        schema: z.object({
-          name: z.string().describe('The employee name to look up (e.g. "刘秉麟")'),
-        }),
-        func: async ({ name }) => {
-          try {
-            const { query: dbQuery } = await import('../utils/db.js');
-            // Try exact match first, then partial match
-            const exactResult = await dbQuery<any>(
-              `SELECT open_id, name, status FROM employees WHERE name = $1`,
-              [name],
-            );
-
-            if (exactResult.rows.length > 0) {
-              const emp = exactResult.rows[0];
-              return JSON.stringify({ open_id: emp.open_id, name: emp.name, status: emp.status });
-            }
-
-            // Partial match (name contains the search term)
-            const partialResult = await dbQuery<any>(
-              `SELECT open_id, name, status FROM employees WHERE name LIKE '%' || $1 || '%'`,
-              [name],
-            );
-
-            if (partialResult.rows.length === 1) {
-              const emp = partialResult.rows[0];
-              return JSON.stringify({ open_id: emp.open_id, name: emp.name, status: emp.status });
-            } else if (partialResult.rows.length > 1) {
-              const names = partialResult.rows.map((r: any) => r.name).join(', ');
-              return `找到多个匹配: ${names}。请提供更精确的名字。`;
-            }
-
-            return `❌ 找不到员工: "${name}"`;
-          } catch (err) {
-            const msg = err instanceof Error ? err.message : String(err);
-            return `❌ 查询员工失败: ${msg}`;
           }
         },
       }),

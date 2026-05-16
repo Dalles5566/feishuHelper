@@ -456,3 +456,15 @@
   - `TaskManager.createTask()`：移除硬编码的 open_id，改为可选参数传入
 - 更新 system prompt：告知 LLM employees 表的存在和查询流程
 - 设计理念：让 LLM 自己编排多步查询（先查人再查任务），而不是代码替它做
+
+- 新增 `query_sql` 通用只读查询工具，替代 `list_tasks`、`get_task`、`lookup_employee`
+  - LLM 可以自由写 SELECT 查询任何数据（tasks、employees、meetings 等）
+  - 安全限制：只允许 SELECT，拒绝 INSERT/UPDATE/DELETE/DROP 等关键字
+  - 结果限制最多 20 行，防止 token 爆炸
+  - system prompt 包含完整数据库 schema，LLM 知道所有表和列
+- 精简工具集为 6 个：analyze_meeting、query_sql、create_feishu_task、update_task、assign_task、complete_task
+- `create_feishu_task` 工具完善
+  - 新增 `acceptance_criteria`、`dependencies`、`priority`、`assignee_open_id` 字段
+  - 移除内部查询代码，LLM 自己用 query_sql 先查好数据再传入
+- 数据库新增 `due_date` 列，创建任务时同时存到本地 DB 和飞书 API
+- 设计理念：查询完全交给 AI 自由发挥（query_sql），增删改走受控的专用工具

@@ -359,14 +359,12 @@ describe('AgentCore', () => {
       const tools = agent.getRegisteredTools();
       const toolNames = tools.map(t => t.name);
       expect(toolNames).toContain('analyze_meeting');
+      expect(toolNames).toContain('query_sql');
       expect(toolNames).toContain('create_feishu_task');
-      expect(toolNames).toContain('list_tasks');
-      expect(toolNames).toContain('get_task');
       expect(toolNames).toContain('update_task');
       expect(toolNames).toContain('assign_task');
       expect(toolNames).toContain('complete_task');
-      expect(toolNames).toContain('lookup_employee');
-      expect(tools.length).toBe(8);
+      expect(tools.length).toBe(6);
     });
 
     it('should have descriptions for all registered tools', async () => {
