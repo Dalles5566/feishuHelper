@@ -468,3 +468,10 @@
   - 移除内部查询代码，LLM 自己用 query_sql 先查好数据再传入
 - 数据库新增 `due_date` 列，创建任务时同时存到本地 DB 和飞书 API
 - 设计理念：查询完全交给 AI 自由发挥（query_sql），增删改走受控的专用工具
+
+- `update_task` 工具完善
+  - 支持修改：title、description、priority、due_date、acceptance_criteria
+  - 飞书同步：每次更新都同步 summary + description + due 到飞书
+  - 描述格式由 LLM 控制（总概括 + 要点 + 变更历史），代码只负责原样存储和同步
+  - system prompt 明确要求 LLM 更新描述时遵循格式规范，保留原有内容，只追加变更历史
+  - 移除代码层面的历史拼接逻辑，避免重复

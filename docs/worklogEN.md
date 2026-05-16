@@ -472,3 +472,10 @@
   - Removed internal query code — LLM uses query_sql to look up data before calling this tool
 - Added `due_date` column to tasks table; now persisted to both local DB and Feishu API
 - Design philosophy: queries are fully AI-driven (query_sql), mutations go through controlled specialized tools
+
+- `update_task` tool improvements
+  - Supports modifying: title, description, priority, due_date, acceptance_criteria
+  - Feishu sync: every update syncs summary + description + due to Feishu
+  - Description format is LLM-controlled (summary + key points + change history); code only stores and syncs as-is
+  - System prompt explicitly requires LLM to follow format spec when updating descriptions, preserving existing content and only appending to change history
+  - Removed code-level history concatenation logic to avoid duplication

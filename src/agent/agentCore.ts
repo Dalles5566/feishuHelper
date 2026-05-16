@@ -83,7 +83,19 @@ Your core capabilities:
 1. **Analyze meeting minutes**: When a user sends meeting content or conversation records, you MUST first call the analyze_meeting tool to get structured analysis results.
 2. **Query any data**: Use query_sql to run SELECT queries against the database. You can look up tasks, employees, meetings, assignments — anything.
 3. **Create tasks**: After analyzing meeting content, create a task for each action item using create_feishu_task. Also use this tool when the user directly asks to create a task.
-4. **Update tasks**: Use update_task to modify task descriptions when requirements change.
+4. **Update tasks**: Use update_task to modify task fields. IMPORTANT: Only update fields that the user explicitly asks to change. Do NOT rewrite or "improve" existing content unless specifically requested. Preserve existing data.
+   - When updating description, follow this format:
+     ## 总概括
+     [One-sentence summary reflecting the LATEST state]
+     ## 要点
+     - [Key point 1 - latest state]
+     - [Key point 2 - latest state]
+     ## 变更历史
+     - [Latest date]: [What changed and why]
+     - [Earlier date]: [What changed and why]
+   - 总概括 and 要点 always reflect the current/latest state
+   - 变更历史 is append-only (newest first), never remove old entries
+   - Use query_sql to read the current description first, then modify it preserving the format
 5. **Assign tasks**: Use assign_task to assign a task to a developer (requires open_id — look it up via query_sql first).
 6. **Complete tasks**: Use complete_task to mark a task as done.
 7. **Reply in Chinese** unless the user writes in English.
@@ -531,22 +543,120 @@ export class AgentCore {
         },
       }),
 
-      // Tool 4: Update task description/title
+      // Tool 4: Update task fields
       new DynamicStructuredTool({
         name: 'update_task',
-        description: 'Update a task description or title. Use this when the user wants to modify task details based on new information or meeting updates.',
+        description: 'Update one or more fields of a task. Supports title, description, priority, due_date, and acceptance_criteria. All fields are optional — only provide the ones you want to change. A reason is required to track why the update was made.',
         schema: z.object({
-          task_id: z.string().describe('The task ID (UUID) to update'),
-          description: z.string().describe('The new description for the task'),
-          reason: z.string().describe('Reason for the update (e.g. "Meeting update on 2026-05-16")'),
+          task_id: z.string().describe('The task ID (UUID) or display_id (e.g. F-000001) to update'),
+          reason: z.string().describe('Reason for the update (e.g. "Meeting update on 2026-05-16", "Priority raised per PM request")'),
+          title: z.string().optional().describe('New title for the task'),
+          description: z.string().optional().describe('New description for the task'),
+          priority: z.enum(['high', 'medium', 'low']).optional().describe('New priority'),
+          due_date: z.string().optional().describe('New due date in YYYY-MM-DD format. Set to empty string to clear.'),
+          acceptance_criteria: z.array(z.string()).optional().describe('New acceptance criteria (replaces existing list)'),
         }),
-        func: async ({ task_id, description, reason }) => {
+        func: async ({ task_id, reason, title, description, priority, due_date, acceptance_criteria }) => {
           try {
-            const { TaskManager } = await import('../services/taskManager.js');
-            const taskManager = new TaskManager({ feishuClient });
+            const { queryOne, update: dbUpdate } = await import('../utils/db.js');
 
-            const task = await taskManager.updateTaskDescription(task_id, description, reason);
-            return `✅ 任务已更新\n标题: ${task.title}\n新描述: ${task.description}\n原因: ${reason}`;
+            // Resolve display_id to UUID
+            let resolvedTaskId = task_id;
+            if (/^[FB]-\d{6}$/.test(task_id)) {
+              const row = await queryOne<any>(
+                'SELECT id FROM tasks WHERE display_id = $1',
+                [task_id],
+              );
+              if (!row) return `❌ 任务不存在: ${task_id}`;
+              resolvedTaskId = row.id;
+            }
+
+            // Build dynamic UPDATE
+            const sets: string[] = [];
+            const params: unknown[] = [];
+            let paramIdx = 1;
+
+            if (title !== undefined) {
+              sets.push(`title = $${paramIdx++}`);
+              params.push(title);
+            }
+            if (description !== undefined) {
+              // Also record in description_history
+              const { TaskManager } = await import('../services/taskManager.js');
+              const taskManager = new TaskManager({ feishuClient });
+              await taskManager.updateTaskDescription(resolvedTaskId, description, reason);
+              // updateTaskDescription handles its own UPDATE, so skip description in the dynamic update
+            } else if (sets.length === 0 && !priority && due_date === undefined && !acceptance_criteria) {
+              return '❌ 没有提供要更新的字段。';
+            }
+            if (priority !== undefined) {
+              sets.push(`priority = $${paramIdx++}`);
+              params.push(priority);
+            }
+            if (due_date !== undefined) {
+              sets.push(`due_date = $${paramIdx++}`);
+              params.push(due_date === '' ? null : due_date);
+            }
+            if (acceptance_criteria !== undefined) {
+              sets.push(`acceptance_criteria = $${paramIdx++}`);
+              params.push(JSON.stringify(acceptance_criteria));
+            }
+
+            if (sets.length > 0) {
+              sets.push(`updated_at = NOW()`);
+              params.push(resolvedTaskId);
+              await dbUpdate(
+                `UPDATE tasks SET ${sets.join(', ')} WHERE id = $${paramIdx}`,
+                params,
+              );
+            }
+
+            // Sync changes to Feishu task
+            const taskRow = await queryOne<any>(
+              'SELECT feishu_task_id, display_id, description FROM tasks WHERE id = $1',
+              [resolvedTaskId],
+            );
+            if (taskRow?.feishu_task_id) {
+              const feishuUpdate: Record<string, unknown> = {};
+              const updateFields: string[] = [];
+
+              // Always sync summary if title changed
+              if (title !== undefined) {
+                feishuUpdate.summary = `${taskRow.display_id}-${title}`;
+                updateFields.push('summary');
+              }
+
+              // Sync due date if changed
+              if (due_date !== undefined) {
+                if (due_date === '') {
+                  feishuUpdate.due = null;
+                } else {
+                  const ts = new Date(due_date + 'T00:00:00Z').getTime();
+                  if (!isNaN(ts)) {
+                    feishuUpdate.due = { timestamp: String(ts), is_all_day: true };
+                  }
+                }
+                updateFields.push('due');
+              }
+
+              // Always sync description to Feishu (LLM formats it with history)
+              const currentDesc = description ?? taskRow.description;
+              feishuUpdate.description = currentDesc;
+              updateFields.push('description');
+
+              try {
+                await feishuClient.task.v2.task.patch({
+                  path: { task_guid: taskRow.feishu_task_id },
+                  params: { user_id_type: 'open_id' },
+                  data: { task: feishuUpdate, update_fields: updateFields },
+                });
+              } catch (feishuErr) {
+                const errMsg = feishuErr instanceof Error ? feishuErr.message : String(feishuErr);
+                console.error(`[update_task] Feishu sync failed: ${errMsg}`);
+              }
+            }
+
+            return `✅ 任务 ${task_id} 已更新\n原因: ${reason}`;
           } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
             return `❌ 更新任务失败: ${msg}`;
