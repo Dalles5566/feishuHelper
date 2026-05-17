@@ -501,3 +501,54 @@
   - agentCore.ts 只保留核心逻辑（LLM 调用、会话管理、tool-calling loop）
   - 工具定义独立文件，方便维护和扩展
 - 更新 system prompt：明确要求 LLM 分配人时先 assign_task 再 advance_task
+
+
+---
+
+## 2026-05-17（周日）
+
+### 今日完成内容
+
+- 完成 17.3.1：实现 `advance_task` 工具（替代 complete_task）
+  - 通用状态推进工具，支持 10 种工作流事件
+  - 智能跳步逻辑：
+    - `confirmed` 从 Created 状态时自动先走 Created → Assigned → InDevelopment（两步）
+    - `qa_failed_impl` / `qa_failed_req` 从 QAPending 时自动先走 QAPending → QAFailed → InDevelopment/Created（两步）
+  - 修复乐观锁并发冲突：将 `WHERE updated_at = $5` 改为 `WHERE state = $5`，解决快速连续状态转换时的竞态条件
+  - 修复 query_sql 关键字误判：`updated_at` 列名不再被误判为 UPDATE 关键字（改用正则词边界匹配）
+  - 更新 system prompt：明确要求 LLM 分配人时先 assign_task 再 advance_task
+
+- 完成 17.3.2：实现 `verify_code` 工具
+  - 接受可选的 `code_changes` 参数（git diff）
+  - 有代码时调 CodeVerifier 做 AI 分析，没代码时基于需求生成参考报告
+  - 无论验证结果如何都自动通过（per 设计文档：AI 验证不阻塞流程）
+  - 自动推进状态：InDevelopment → VerificationPending → VerificationPassed
+  - 验证报告自动存入 verification_reports 表
+
+- 完成 17.3.3：实现 `generate_test_doc` 工具
+  - 调 DocGenerator.generateTestDocument() 生成正向/负向/边界测试用例
+  - 修复 `Cannot read properties of undefined (reading 'length')` 错误：确保 acceptanceCriteria 始终为数组，空时用任务标题作为默认验收标准
+  - 传完整 Task 对象给 DocGenerator（补全所有必需字段）
+  - 测试文档存入 documents 表
+  - 测试文档格式化为 markdown 后作为附件上传到飞书任务（调 attachment.upload API）
+  - 自动推进状态：VerificationPassed → QAPending
+
+- 代码重构：抽取工具定义到 `src/agent/agentCoreToolBoxRegister.ts`
+  - agentCore.ts 从 ~800 行精简到 ~300 行，只保留核心逻辑
+  - 工具定义独立文件，方便后续扩展（如添加 submit_qa_feedback）
+
+- 完整工作流已验证通过：
+  - 创建任务 → 分配 → 确认开始 → 开发完成 → AI 验证 → 生成测试文档 → QA 通过/失败 → 回退/推进
+  - 所有状态转换都写入 workflow_logs 表
+  - 飞书同步：创建/更新/分配/附件上传
+
+### 当前工具集（8 个）
+
+1. `analyze_meeting` — 分析会议内容，存 DB
+2. `query_sql` — 通用只读 SQL 查询
+3. `create_feishu_task` — 创建任务（DB + 飞书 API + 自动 Assigned）
+4. `update_task` — 更新任务字段（DB + 飞书同步）
+5. `assign_task` — 分配任务（DB + 飞书 addMembers + 自动 Assigned）
+6. `advance_task` — 通用状态推进（状态机校验 + workflow_logs）
+7. `verify_code` — AI 代码验证（可选代码 + 自动推进）
+8. `generate_test_doc` — 生成测试文档（存 DB + 飞书附件）

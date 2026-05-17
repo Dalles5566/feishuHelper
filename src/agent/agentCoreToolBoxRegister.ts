@@ -420,6 +420,11 @@ Invalid transitions will be rejected.`,
             await taskManager.updateTaskState(resolvedTaskId, 'Assigned', 'Auto-assigned before confirmation');
           }
 
+          // Handle QA failures from QAPending: auto-advance through QAFailed first
+          if ((event === 'qa_failed_impl' || event === 'qa_failed_req') && currentState === 'QAPending') {
+            await taskManager.updateTaskState(resolvedTaskId, 'QAFailed', reason || 'QA failed');
+          }
+
           const task = await taskManager.updateTaskState(
             resolvedTaskId,
             targetState as any,
@@ -430,6 +435,195 @@ Invalid transitions will be rejected.`,
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
           return `❌ 状态推进失败: ${msg}`;
+        }
+      },
+    }),
+
+    // Tool 7: Verify code (AI code review)
+    new DynamicStructuredTool({
+      name: 'verify_code',
+      description: `Verify code changes against task requirements. Call this after a developer says they finished a task.
+- If code_changes is provided (git diff), AI will analyze the code against acceptance criteria.
+- If no code_changes, AI generates a reference report based on task description and acceptance criteria.
+- Either way, the task auto-advances: InDevelopment → VerificationPending → VerificationPassed.
+- After this, call generate_test_doc to create QA test document.`,
+      schema: z.object({
+        task_id: z.string().describe('The task ID (UUID) or display_id (e.g. F-000001)'),
+        code_changes: z.string().optional().describe('Git diff or code snippet to verify. If not provided, generates a reference report based on requirements only.'),
+      }),
+      func: async ({ task_id, code_changes }) => {
+        try {
+          const { queryOne } = await import('../utils/db.js');
+
+          let resolvedTaskId = task_id;
+          if (/^[FB]-\d{6}$/.test(task_id)) {
+            const row = await queryOne<any>('SELECT id FROM tasks WHERE display_id = $1', [task_id]);
+            if (!row) return `❌ 任务不存在: ${task_id}`;
+            resolvedTaskId = row.id;
+          }
+
+          // Get task details for verification
+          const taskRow = await queryOne<any>(
+            'SELECT title, description, acceptance_criteria, state FROM tasks WHERE id = $1',
+            [resolvedTaskId],
+          );
+          if (!taskRow) return `❌ 任务不存在: ${task_id}`;
+
+          // Advance to VerificationPending first (if in InDevelopment)
+          const { TaskManager } = await import('../services/taskManager.js');
+          const taskManager = new TaskManager({ feishuClient });
+
+          if (taskRow.state === 'InDevelopment') {
+            await taskManager.updateTaskState(resolvedTaskId, 'VerificationPending', 'dev_complete');
+          }
+
+          // Run code verification
+          const { CodeVerifier } = await import('../services/codeVerifier.js');
+          const verifier = new CodeVerifier();
+
+          const acceptanceCriteria = Array.isArray(taskRow.acceptance_criteria)
+            ? taskRow.acceptance_criteria
+            : JSON.parse(taskRow.acceptance_criteria || '[]');
+
+          const report = await verifier.verify(resolvedTaskId, {
+            taskDescription: taskRow.description,
+            acceptanceCriteria,
+            codeChanges: code_changes || '(No code provided — reference report based on requirements)',
+          });
+
+          // Always advance to VerificationPassed (per design: AI verification never blocks)
+          try {
+            await taskManager.updateTaskState(resolvedTaskId, 'VerificationPassed', 'verification_passed');
+          } catch {
+            // May already be in VerificationPassed
+          }
+
+          const statusEmoji = report.status === 'passed' ? '✅' : report.status === 'failed' ? '⚠️' : '📋';
+          return `${statusEmoji} 代码验证完成\n任务: ${task_id}\n状态: ${report.status}\n匹配度: ${report.matchScore}/100\n已匹配标准: ${report.analysis.matchedCriteria.length}\n未匹配标准: ${report.analysis.unmatchedCriteria.length}\n建议: ${report.analysis.recommendations.join('; ') || '无'}`;
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          return `❌ 代码验证失败: ${msg}`;
+        }
+      },
+    }),
+
+    // Tool 8: Generate test document for QA
+    new DynamicStructuredTool({
+      name: 'generate_test_doc',
+      description: `Generate a test document for QA based on task acceptance criteria. Call this after verify_code succeeds.
+Generates positive, negative, and boundary test cases. Auto-advances state: VerificationPassed → QAPending.`,
+      schema: z.object({
+        task_id: z.string().describe('The task ID (UUID) or display_id (e.g. F-000001)'),
+      }),
+      func: async ({ task_id }) => {
+        try {
+          const { queryOne, insert } = await import('../utils/db.js');
+
+          let resolvedTaskId = task_id;
+          if (/^[FB]-\d{6}$/.test(task_id)) {
+            const row = await queryOne<any>('SELECT id FROM tasks WHERE display_id = $1', [task_id]);
+            if (!row) return `❌ 任务不存在: ${task_id}`;
+            resolvedTaskId = row.id;
+          }
+
+          // Get task details
+          const taskRow = await queryOne<any>(
+            'SELECT title, description, acceptance_criteria, state FROM tasks WHERE id = $1',
+            [resolvedTaskId],
+          );
+          if (!taskRow) return `❌ 任务不存在: ${task_id}`;
+
+          // Generate test document
+          const { DocGenerator } = await import('../services/docGenerator.js');
+          const generator = new DocGenerator();
+
+          const acceptanceCriteria = Array.isArray(taskRow.acceptance_criteria)
+            ? taskRow.acceptance_criteria
+            : (typeof taskRow.acceptance_criteria === 'string'
+              ? JSON.parse(taskRow.acceptance_criteria || '[]')
+              : []);
+
+          // If no acceptance criteria, generate based on description
+          const criteriaForDoc = acceptanceCriteria.length > 0
+            ? acceptanceCriteria
+            : [`完成任务: ${taskRow.title}`];
+
+          const testDoc = await generator.generateTestDocument({
+            id: resolvedTaskId,
+            title: taskRow.title,
+            description: taskRow.description || '',
+            acceptanceCriteria: criteriaForDoc,
+            dependencies: [],
+            priority: 'medium',
+            state: 'VerificationPassed',
+            sourceActionItemId: '',
+            retryCount: 0,
+            descriptionHistory: [],
+            displayId: '',
+            taskType: 'feature',
+            createdAt: '',
+            updatedAt: '',
+          } as any);
+
+          // Save test document to documents table
+          await insert(
+            `INSERT INTO documents (title, doc_type, content, related_task_id)
+             VALUES ($1, $2, $3, $4) RETURNING id`,
+            [
+              `Test Document: ${taskRow.title}`,
+              'test_doc',
+              JSON.stringify(testDoc, null, 2),
+              resolvedTaskId,
+            ],
+          );
+
+          // Post test document as attachment on Feishu task
+          const feishuTaskRow = await queryOne<any>(
+            'SELECT feishu_task_id FROM tasks WHERE id = $1',
+            [resolvedTaskId],
+          );
+          if (feishuTaskRow?.feishu_task_id && testDoc.testCases) {
+            // Format test doc as markdown
+            const mdContent = testDoc.testCases.map((tc: any, i: number) => {
+              const steps = tc.steps?.map((s: any) => `  ${s.order}. ${s.action}`).join('\n') || '';
+              return `## 测试用例 ${i + 1}: ${tc.title}\n- 类型: ${tc.type}\n- 前置条件: ${tc.preconditions?.join(', ') || '无'}\n- 步骤:\n${steps}\n- 预期结果: ${tc.expectedResult}`;
+            }).join('\n\n');
+
+            const fullContent = `# 测试文档: ${taskRow.title}\n\n生成时间: ${new Date().toISOString()}\n\n${mdContent}`;
+
+            try {
+              const { Readable } = await import('stream');
+              const buffer = Buffer.from(fullContent, 'utf-8');
+              const stream = Readable.from(buffer);
+              (stream as any).name = `test_doc_${task_id}.md`;
+
+              await feishuClient.task.v2.attachment.upload({
+                data: {
+                  resource_type: 'task',
+                  resource_id: feishuTaskRow.feishu_task_id,
+                  file: stream,
+                },
+              });
+            } catch (feishuErr) {
+              const errMsg = feishuErr instanceof Error ? feishuErr.message : String(feishuErr);
+              console.error(`[generate_test_doc] Feishu attachment upload failed: ${errMsg}`);
+            }
+          }
+
+          // Advance to QAPending
+          const { TaskManager } = await import('../services/taskManager.js');
+          const taskManager = new TaskManager({ feishuClient });
+          try {
+            await taskManager.updateTaskState(resolvedTaskId, 'QAPending', 'Test document generated');
+          } catch {
+            // May already be in QAPending
+          }
+
+          const testCaseCount = testDoc.testCases?.length || 0;
+          return `📄 测试文档已生成\n任务: ${task_id}\n测试用例数: ${testCaseCount}\n状态已推进到: QAPending\n\nQA 可以开始测试了。`;
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          return `❌ 生成测试文档失败: ${msg}`;
         }
       },
     }),

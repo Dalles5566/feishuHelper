@@ -34,6 +34,7 @@ const VALID_TRANSITIONS: ReadonlySet<string> = new Set([
   'QAPending->QAPassed',
   'QAPending->QAFailed',
   'QAFailed->InDevelopment',
+  'QAFailed->Created',
   'QAPassed->DocumentationUpdated',
   'DocumentationUpdated->Completed',
 

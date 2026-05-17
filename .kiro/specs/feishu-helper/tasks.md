@@ -314,23 +314,24 @@ Phase 1 完成了各模块的独立实现，但联调时发现 `@larksuiteoapi/l
   - [x] update_task：修改任务字段（title、description、priority、due_date、acceptance_criteria）+ 飞书同步
   - [ ] assign_task：分配任务给人（写 DB + task_assignments + 飞书 addMembers）— 已注册，待测试
 
-- [ ] 17.3 完整工作流串联（严格按设计文档状态机）
-  - [ ] 17.3.1 注册 advance_task 工具：通用状态推进（替代 complete_task）
+- [-] 17.3 完整工作流串联（严格按设计文档状态机）
+  - [x] 17.3.1 注册 advance_task 工具：通用状态推进（替代 complete_task）
     - 接受 task_id + event 参数
-    - event: confirmed / dev_complete / qa_passed / doc_updated / completed
+    - event: assigned / confirmed / dev_complete / verification_passed / qa_passed / doc_updated / completed / qa_failed_impl / qa_failed_req / verification_failed
     - 内部调状态机 validateTransition，非法转换直接拒绝
-    - 状态变更时发送飞书通知
-  - [ ] 17.3.2 注册 verify_code 工具：AI 验证代码是否符合需求
+    - 智能跳步：confirmed 从 Created 自动走 Assigned → InDevelopment；qa_failed 从 QAPending 自动走 QAFailed → InDevelopment/Created
+  - [x] 17.3.2 注册 verify_code 工具：AI 验证代码是否符合需求
     - 调 CodeVerifier.verify()，生成验证报告
+    - 可选 code_changes 参数（有代码就分析，没有就基于需求生成参考报告）
     - 自动推进状态：InDevelopment → VerificationPending → VerificationPassed
     - 验证报告存入 verification_reports 表
-  - [ ] 17.3.3 注册 generate_test_doc 工具：生成测试文档给 QA
+  - [x] 17.3.3 注册 generate_test_doc 工具：生成测试文档给 QA
     - 调 DocGenerator.generateTestDocument()
     - 自动推进状态：VerificationPassed → QAPending
-    - 测试文档存入 documents 表
+    - 测试文档存入 documents 表 + 作为附件上传到飞书任务
   - [ ] 17.3.4 注册 submit_qa_feedback 工具：QA 提交测试结果
     - 调 QAFeedbackService
-    - 通过 → QAPassed；失败（实现错误）→ InDevelopment；失败（需求错误）→ Created
+    - 通过 → QAPassed；失败（实现错误）→ QAFailed → InDevelopment；失败（需求错误）→ QAFailed → Created
     - QA 反馈存入 qa_feedbacks 表
 
 - [ ] 17.4 飞书数据同步

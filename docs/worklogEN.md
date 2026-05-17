@@ -505,3 +505,54 @@
   - agentCore.ts now only contains core logic (LLM calls, session management, tool-calling loop)
   - Tool definitions in separate file for easier maintenance and extension
 - Updated system prompt: explicitly requires LLM to call assign_task before advance_task when someone volunteers
+
+
+---
+
+## 2026-05-17 (Sunday)
+
+### What was done today
+
+- Completed 17.3.1: Implemented `advance_task` tool (replaces complete_task)
+  - General-purpose state advancement tool supporting 10 workflow events
+  - Smart skip logic:
+    - `confirmed` from Created: auto-advances through Created → Assigned → InDevelopment (two steps)
+    - `qa_failed_impl` / `qa_failed_req` from QAPending: auto-advances through QAPending → QAFailed → InDevelopment/Created (two steps)
+  - Fixed optimistic lock concurrent modification: changed `WHERE updated_at = $5` to `WHERE state = $5`, resolving race condition in rapid sequential state transitions
+  - Fixed query_sql keyword false positive: `updated_at` column name no longer flagged as UPDATE keyword (switched to regex word boundary matching)
+  - Updated system prompt: explicitly requires LLM to call assign_task before advance_task when someone volunteers
+
+- Completed 17.3.2: Implemented `verify_code` tool
+  - Accepts optional `code_changes` parameter (git diff)
+  - With code: calls CodeVerifier for AI analysis; without code: generates reference report based on requirements
+  - Always passes regardless of verification result (per design doc: AI verification never blocks flow)
+  - Auto-advances state: InDevelopment → VerificationPending → VerificationPassed
+  - Verification report automatically saved to verification_reports table
+
+- Completed 17.3.3: Implemented `generate_test_doc` tool
+  - Calls DocGenerator.generateTestDocument() to generate positive/negative/boundary test cases
+  - Fixed `Cannot read properties of undefined (reading 'length')` error: ensures acceptanceCriteria is always an array, uses task title as default criterion when empty
+  - Passes complete Task object to DocGenerator (fills all required fields)
+  - Test document saved to documents table
+  - Test document formatted as markdown and uploaded as attachment to Feishu task (attachment.upload API)
+  - Auto-advances state: VerificationPassed → QAPending
+
+- Code refactoring: extracted tool definitions to `src/agent/agentCoreToolBoxRegister.ts`
+  - agentCore.ts reduced from ~800 lines to ~300 lines, keeping only core logic
+  - Tool definitions in separate file for easier extension (e.g., adding submit_qa_feedback)
+
+- Full workflow verified end-to-end:
+  - Create task → Assign → Confirm start → Dev complete → AI verify → Generate test doc → QA pass/fail → Revert/advance
+  - All state transitions logged to workflow_logs table
+  - Feishu sync: create/update/assign/attachment upload
+
+### Current tool set (8 tools)
+
+1. `analyze_meeting` — Analyze meeting content, save to DB
+2. `query_sql` — General-purpose read-only SQL queries
+3. `create_feishu_task` — Create task (DB + Feishu API + auto Assigned)
+4. `update_task` — Update task fields (DB + Feishu sync)
+5. `assign_task` — Assign task (DB + Feishu addMembers + auto Assigned)
+6. `advance_task` — General state advancement (state machine validation + workflow_logs)
+7. `verify_code` — AI code verification (optional code + auto advance)
+8. `generate_test_doc` — Generate test document (save DB + Feishu attachment)

@@ -99,6 +99,11 @@ Your core capabilities:
 5. **Assign tasks**: Use assign_task to assign a task to a developer (requires open_id — look it up via query_sql first). This also syncs to Feishu and auto-advances state to Assigned.
 6. **Advance task state**: Use advance_task to push a task through the workflow. Valid events: assigned, confirmed, dev_complete, verification_passed, qa_passed, doc_updated, completed, qa_failed_impl, qa_failed_req, verification_failed.
    - IMPORTANT: If someone says "I'll do it" or "I can work on this", you must FIRST call assign_task (to assign them and sync to Feishu), THEN call advance_task with event "confirmed" to move to InDevelopment.
+7. **Verify code & generate test doc**: When a developer says "done" or "finished":
+   - Call advance_task("dev_complete") to move to VerificationPending
+   - Call verify_code(task_id, code_changes?) to run AI verification
+   - Call generate_test_doc(task_id) to create QA test document
+   - These three calls should happen in sequence automatically.
 7. **Reply in Chinese** unless the user writes in English.
 
 DATABASE CONTEXT:
