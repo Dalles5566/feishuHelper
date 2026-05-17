@@ -488,3 +488,20 @@
   - Found that Feishu's "activity subscription" is tasklist-based, pushes to chat groups, not to app backend
   - Feishu currently has no task-level change webhook events
   - Pending: considering Plan B (read-time sync: fetch latest state from Feishu API before each operation)
+
+- Implemented `advance_task` tool (replaces complete_task)
+  - General-purpose state advancement tool supporting all valid workflow events
+  - Events: assigned, confirmed, dev_complete, verification_passed, qa_passed, doc_updated, completed, qa_failed_impl, qa_failed_req, verification_failed
+  - Smart skip: if "confirmed" but task is in Created, auto-advances through Assigned first
+  - assign_task also auto-advances Created → Assigned
+  - create_feishu_task with assignee auto-advances to Assigned
+- Fixed optimistic lock concurrent modification error
+  - Root cause: rapid back-to-back state transitions failed because `WHERE updated_at = $5` didn't match (first step changed updated_at)
+  - Fix: changed optimistic lock to `WHERE state = $5` (check state instead of timestamp)
+- Fixed query_sql keyword false positive
+  - Root cause: `updated_at` column name was flagged as containing `UPDATE` keyword
+  - Fix: use regex word boundary `\b` matching, removed UPDATE from forbidden list
+- Extracted tool definitions to `src/agent/agentCoreToolBoxRegister.ts`
+  - agentCore.ts now only contains core logic (LLM calls, session management, tool-calling loop)
+  - Tool definitions in separate file for easier maintenance and extension
+- Updated system prompt: explicitly requires LLM to call assign_task before advance_task when someone volunteers

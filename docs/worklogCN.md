@@ -484,3 +484,20 @@
   - 发现飞书的"动态订阅"是基于清单（Tasklist）的，推送到群，不是推送到应用后端
   - 飞书目前没有任务级别的变更 Webhook 事件
   - 待定：考虑方案 B（读时同步：操作前先从飞书 API 拉最新状态）
+
+- 实现 `advance_task` 工具（替代 complete_task）
+  - 通用状态推进工具，支持所有合法的工作流事件
+  - 事件列表：assigned、confirmed、dev_complete、verification_passed、qa_passed、doc_updated、completed、qa_failed_impl、qa_failed_req、verification_failed
+  - 智能跳步：如果 confirmed 时任务还在 Created，自动先走 Created → Assigned
+  - assign_task 也会自动推进 Created → Assigned
+  - create_feishu_task 带 assignee 时自动推进到 Assigned
+- 修复乐观锁并发冲突
+  - 原因：快速连续两步状态转换时，`WHERE updated_at = $5` 匹配不到（第一步改了 updated_at）
+  - 修复：乐观锁改为 `WHERE state = $5`（检查状态而非时间戳）
+- 修复 query_sql 关键字误判
+  - 原因：`updated_at` 被误判为包含 `UPDATE` 关键字
+  - 修复：改用正则 `\b` 词边界匹配，并从禁止列表移除 UPDATE（SELECT 里常用 updated_at）
+- 抽取工具定义到 `src/agent/agentCoreToolBoxRegister.ts`
+  - agentCore.ts 只保留核心逻辑（LLM 调用、会话管理、tool-calling loop）
+  - 工具定义独立文件，方便维护和扩展
+- 更新 system prompt：明确要求 LLM 分配人时先 assign_task 再 advance_task

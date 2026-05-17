@@ -173,7 +173,7 @@ describe('transition', () => {
     const params = updateCall[2] as unknown[];
     expect(params[0]).toBe('Assigned');   // new state
     expect(params[3]).toBe('task-1');     // task id
-    expect(params[4]).toEqual(updatedAt); // optimistic lock timestamp
+    expect(params[4]).toBe('Created');    // optimistic lock on current state
   });
 
   it('inserts a workflow_log row with correct fields', async () => {

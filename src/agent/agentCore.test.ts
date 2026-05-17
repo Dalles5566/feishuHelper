@@ -363,7 +363,7 @@ describe('AgentCore', () => {
       expect(toolNames).toContain('create_feishu_task');
       expect(toolNames).toContain('update_task');
       expect(toolNames).toContain('assign_task');
-      expect(toolNames).toContain('complete_task');
+      expect(toolNames).toContain('advance_task');
       expect(tools.length).toBe(6);
     });
 

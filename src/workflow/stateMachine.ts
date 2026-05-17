@@ -173,7 +173,7 @@ export async function transition(
       incrementRetry && context.reason ? context.reason : null;
 
     // 4. Update the task row with optimistic lock check
-    //    We re-check updated_at to detect concurrent modifications.
+    //    We re-check state to detect concurrent modifications.
     const updateResult = await clientQuery<{ id: string }>(
       client,
       `UPDATE tasks
@@ -181,10 +181,10 @@ export async function transition(
               retry_count    = $2,
               failure_context = COALESCE($3, failure_context),
               updated_at     = NOW()
-        WHERE id         = $4
-          AND updated_at = $5
+        WHERE id    = $4
+          AND state = $5
         RETURNING id`,
-      [toState, newRetryCount, failureContext, taskId, currentUpdatedAt],
+      [toState, newRetryCount, failureContext, taskId, fromState],
     );
 
     if (updateResult.rows.length === 0) {

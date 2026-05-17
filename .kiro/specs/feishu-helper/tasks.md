@@ -308,25 +308,38 @@ Phase 1 完成了各模块的独立实现，但联调时发现 `@larksuiteoapi/l
   - 已完成：create_feishu_task 工具调用 TaskManager.createTask()，走完整流程
   - 已修复：TaskManager.splitTask() 从 MCP 改为 REST API，移除已删除的 meeting_id 列引用
 
-- [x] 17.2 注册更多 AgentCore 工具
-  - list_tasks：按状态/优先级/分配人查询任务列表
-  - get_task：查询单个任务详情
-  - update_task：修改任务描述（保留历史）
-  - assign_task：分配任务给人（调 TaskAssignmentService）
-  - complete_task：标记任务完成（调状态机）
+- [-] 17.2 注册更多 AgentCore 工具
+  - [x] query_sql：通用只读 SQL 查询（替代 list_tasks、get_task、lookup_employee）
+  - [x] create_feishu_task：完整参数（priority、assignee、due_date、acceptance_criteria、dependencies）
+  - [x] update_task：修改任务字段（title、description、priority、due_date、acceptance_criteria）+ 飞书同步
+  - [ ] assign_task：分配任务给人（写 DB + task_assignments + 飞书 addMembers）— 已注册，待测试
 
-- [ ] 17.3 TaskAssignment 改用 REST API
-  - 当前 taskAssignment.ts 可能还依赖 MCP
-  - 需要改为通过 node-sdk Client 添加任务成员
+- [ ] 17.3 完整工作流串联（严格按设计文档状态机）
+  - [ ] 17.3.1 注册 advance_task 工具：通用状态推进（替代 complete_task）
+    - 接受 task_id + event 参数
+    - event: confirmed / dev_complete / qa_passed / doc_updated / completed
+    - 内部调状态机 validateTransition，非法转换直接拒绝
+    - 状态变更时发送飞书通知
+  - [ ] 17.3.2 注册 verify_code 工具：AI 验证代码是否符合需求
+    - 调 CodeVerifier.verify()，生成验证报告
+    - 自动推进状态：InDevelopment → VerificationPending → VerificationPassed
+    - 验证报告存入 verification_reports 表
+  - [ ] 17.3.3 注册 generate_test_doc 工具：生成测试文档给 QA
+    - 调 DocGenerator.generateTestDocument()
+    - 自动推进状态：VerificationPassed → QAPending
+    - 测试文档存入 documents 表
+  - [ ] 17.3.4 注册 submit_qa_feedback 工具：QA 提交测试结果
+    - 调 QAFeedbackService
+    - 通过 → QAPassed；失败（实现错误）→ InDevelopment；失败（需求错误）→ Created
+    - QA 反馈存入 qa_feedbacks 表
 
-- [ ] 17.4 WorkflowEngine 串联
-  - 创建任务后自动进入 Created 状态（已实现）
-  - 分配任务后推进到 Assigned 状态
-  - 状态变更时发送通知
+- [ ] 17.4 飞书数据同步
+  - 方案待定：读时同步（操作前先从飞书 API 拉最新状态）或事件订阅
+  - 解决手动在飞书上修改后本地 DB 不同步的问题
 
 - [ ] 17.5 修复测试
-  - taskManager.test.ts 有 44 个测试失败（因为接口从 MCP 改成了 REST API）
-  - 需要更新 mock 和测试用例
+  - taskManager.test.ts 需要更新 mock（接口从 MCP 改成了 REST API）
+  - 需要更新测试用例匹配新的 createTask 流程（先写 DB 再调飞书 API）
 
 - [-] 17.6 清理代码
   - [x] 删除 feishuMcp.ts 和 feishuAuth.ts（已不再使用）
