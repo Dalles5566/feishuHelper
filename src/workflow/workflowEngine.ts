@@ -103,13 +103,12 @@ export async function startWorkflow(
   for (const item of meetingAnalysis.actionItems) {
     await insert<InsertedTaskRow>(
       `INSERT INTO tasks
-         (title, description, acceptance_criteria, dependencies, priority, state, meeting_id, source_action_item_id, retry_count, description_history, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, 'Created', $6, $7, 0, '[]', NOW(), NOW())
+         (title, description, dependencies, priority, state, meeting_id, source_action_item_id, retry_count, description_history, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, 'Created', $5, $6, 0, '[]', NOW(), NOW())
        RETURNING id`,
       [
         item.description.slice(0, 100), // title derived from description
         item.description,
-        JSON.stringify(item.acceptanceCriteria),
         JSON.stringify(item.dependencies),
         item.priority,
         meetingId,

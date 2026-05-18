@@ -46,7 +46,6 @@ function makeMeetingAnalysis(actionItemCount = 2): MeetingAnalysis {
     context: `Context for action item ${i + 1}`,
     priority: 'medium' as const,
     dependencies: [],
-    acceptanceCriteria: [`Criterion ${i + 1}`],
   }));
 
   return {

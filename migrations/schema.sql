@@ -36,7 +36,6 @@ CREATE TABLE IF NOT EXISTS tasks (
   task_type VARCHAR(10) NOT NULL DEFAULT 'feature',
   title VARCHAR(500) NOT NULL,
   description TEXT NOT NULL,
-  acceptance_criteria JSONB NOT NULL DEFAULT '[]',
   dependencies JSONB NOT NULL DEFAULT '[]',
   priority VARCHAR(10) NOT NULL DEFAULT 'medium',
   state VARCHAR(30) NOT NULL DEFAULT 'Created',

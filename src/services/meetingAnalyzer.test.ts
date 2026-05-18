@@ -91,8 +91,7 @@ const sampleAnalysisResult: MeetingAnalysis = {
       priority: 'high',
       suggestedAssignee: 'Charlie',
       dependencies: ['AI-4'],
-      acceptanceCriteria: ['Dashboard renders user data', 'Responsive design implemented'],
-    },
+      acceptanceCriteria: ['Dashboard renders user data', 'Responsive design implemented'],    },
     {
       id: 'AI-2',
       description: 'Add rate limiting to API endpoints',
@@ -119,8 +118,7 @@ const sampleAnalysisResult: MeetingAnalysis = {
       suggestedAssignee: 'Alice',
       dependencies: [],
       acceptanceCriteria: ['Integration tests cover login flow', 'Token refresh tested'],
-    },
-  ],
+    },  ],
   decisions: [
     {
       id: 'D-1',
@@ -186,7 +184,7 @@ describe('MeetingAnalyzer', () => {
       expect(result.discussionPoints).toHaveLength(2);
     });
 
-    it('should include priority, suggestedAssignee, dependencies, and acceptanceCriteria in action items', async () => {
+    it('should include priority, suggestedAssignee, and dependencies in action items', async () => {
       const mockLlm = createMockLlm([sampleAnalysisResult]);
       const analyzer = new MeetingAnalyzer({ llm: mockLlm, retrySleep: noopSleep });
 
@@ -198,8 +196,6 @@ describe('MeetingAnalyzer', () => {
         expect(item.context).toBeTruthy();
         expect(['high', 'medium', 'low']).toContain(item.priority);
         expect(Array.isArray(item.dependencies)).toBe(true);
-        expect(Array.isArray(item.acceptanceCriteria)).toBe(true);
-        expect(item.acceptanceCriteria.length).toBeGreaterThan(0);
       }
     });
 

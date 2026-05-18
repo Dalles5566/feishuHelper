@@ -106,7 +106,7 @@ DATABASE CONTEXT:
 - When the user mentions a person by name, FIRST call lookup_employee to get their open_id, THEN use that open_id in list_tasks or assign_task.
 - You have a query_sql tool for any read-only query. Here is the full database schema:
   - employees(id UUID, open_id, name, status, created_at, updated_at)
-  - tasks(id UUID, display_id, task_type, title, description, acceptance_criteria JSONB, dependencies JSONB, priority, state, assignee_id, parent_task_id, source_action_item_id, feishu_task_id, retry_count, failure_context, description_history JSONB, created_at, updated_at)
+  - tasks(id UUID, display_id, task_type, title, description, dependencies JSONB, priority, state, assignee_id, parent_task_id, source_action_item_id, feishu_task_id, retry_count, failure_context, description_history JSONB, created_at, updated_at)
   - meetings(id UUID, title, meeting_date, feishu_doc_id, raw_content, analysis JSONB, created_at)
   - task_meetings(id UUID, task_id, meeting_id, created_at)
   - workflow_logs(id UUID, task_id, from_state, to_state, trigger, actor, reason, metadata JSONB, timestamp)

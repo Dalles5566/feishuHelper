@@ -62,12 +62,7 @@ function createMockLlm(responses: unknown[]): BaseChatModel {
 // ---------------------------------------------------------------------------
 
 const sampleCodeContext: CodeContext = {
-  taskDescription: 'Implement user authentication with JWT tokens',
-  acceptanceCriteria: [
-    'User can log in with email and password',
-    'JWT token is returned on successful login',
-    'Invalid credentials return 401 status',
-  ],
+  taskDescription: 'Implement user authentication with JWT tokens. User can log in with email and password. JWT token is returned on successful login. Invalid credentials return 401 status.',
   codeChanges: `
 +function login(email: string, password: string): string {
 +  const user = db.findUser(email);
@@ -193,17 +188,13 @@ describe('CodeVerifier', () => {
       expect(report.generatedAt).toBeTruthy();
     });
 
-    it('should advance workflow to VerificationPassed when status is passed', async () => {
+    it('should NOT call advanceWorkflow (verify_code is report-only)', async () => {
       const mockLlm = createMockLlm([passedLlmResult]);
       const verifier = new CodeVerifier({ llm: mockLlm, retrySleep: noopSleep });
 
       await verifier.verify('task-123', sampleCodeContext);
 
-      expect(advanceWorkflow).toHaveBeenCalledOnce();
-      const [calledTaskId, calledEvent] = vi.mocked(advanceWorkflow).mock.calls[0];
-      expect(calledTaskId).toBe('task-123');
-      expect(calledEvent.type).toBe('verification_result');
-      expect(calledEvent.payload['passed']).toBe(true);
+      expect(advanceWorkflow).not.toHaveBeenCalled();
     });
 
     it('should persist the report to the database', async () => {
@@ -234,17 +225,13 @@ describe('CodeVerifier', () => {
       expect(report.analysis.discrepancies[0].severity).toBe('critical');
     });
 
-    it('should advance workflow with passed=true when status is failed (always proceeds to QA)', async () => {
+    it('should NOT call advanceWorkflow even when status is failed', async () => {
       const mockLlm = createMockLlm([failedLlmResult]);
       const verifier = new CodeVerifier({ llm: mockLlm, retrySleep: noopSleep });
 
       await verifier.verify('task-123', sampleCodeContext);
 
-      expect(advanceWorkflow).toHaveBeenCalledOnce();
-      const [, calledEvent] = vi.mocked(advanceWorkflow).mock.calls[0];
-      expect(calledEvent.type).toBe('verification_result');
-      expect(calledEvent.payload['passed']).toBe(true); // always advances to QA
-      expect(calledEvent.payload['aiStatus']).toBe('failed');
+      expect(advanceWorkflow).not.toHaveBeenCalled();
     });
   });
 
@@ -259,16 +246,13 @@ describe('CodeVerifier', () => {
       expect(report.analysis.recommendations.length).toBeGreaterThan(0);
     });
 
-    it('should advance workflow with passed=true when status is ambiguous (always proceeds to QA)', async () => {
+    it('should NOT call advanceWorkflow even when status is ambiguous', async () => {
       const mockLlm = createMockLlm([ambiguousLlmResult]);
       const verifier = new CodeVerifier({ llm: mockLlm, retrySleep: noopSleep });
 
       await verifier.verify('task-123', sampleCodeContext);
 
-      expect(advanceWorkflow).toHaveBeenCalledOnce();
-      const [, calledEvent] = vi.mocked(advanceWorkflow).mock.calls[0];
-      expect(calledEvent.payload['passed']).toBe(true); // always advances to QA
-      expect(calledEvent.payload['aiStatus']).toBe('ambiguous');
+      expect(advanceWorkflow).not.toHaveBeenCalled();
     });
 
     it('should include a recommendation to update requirements when ambiguous', async () => {
@@ -316,10 +300,8 @@ describe('CodeVerifier', () => {
         ...report.analysis.matchedCriteria,
         ...report.analysis.unmatchedCriteria,
       ];
-      // All original acceptance criteria should appear in matched or unmatched
-      for (const criterion of sampleCodeContext.acceptanceCriteria) {
-        expect(allCriteria).toContain(criterion);
-      }
+      // LLM returns matched/unmatched criteria extracted from description
+      expect(Array.isArray(allCriteria)).toBe(true);
     });
 
     it('should have matchScore between 0 and 100', async () => {
@@ -382,15 +364,15 @@ describe('CodeVerifier', () => {
       });
     });
 
-    it('should throw VALIDATION_MISSING_FIELD for empty acceptanceCriteria', async () => {
-      const mockLlm = createMockLlm([]);
-      const verifier = new CodeVerifier({ llm: mockLlm, retrySleep: noopSleep });
+    it('should succeed with no acceptanceCriteria field (field removed)', async () => {
+      vi.mocked(queryOne).mockResolvedValue({ id: 'task-123', state: 'InDevelopment' });
+      vi.mocked(insert).mockResolvedValue({ id: 'report-1' });
 
-      const ctx: CodeContext = { ...sampleCodeContext, acceptanceCriteria: [] };
-      await expect(verifier.verify('task-123', ctx)).rejects.toMatchObject({
-        code: 'VALIDATION_MISSING_FIELD',
-        category: 'validation',
-      });
+      const mockLlm = createMockLlm([passedLlmResult]);
+      const verifier = new CodeVerifier({ llm: mockLlm, retrySleep: noopSleep, skipWorkflowAdvance: true });
+
+      const result = await verifier.verify('task-123', sampleCodeContext);
+      expect(result.status).toBe('passed');
     });
   });
 
@@ -492,7 +474,6 @@ describe('CodeVerifier', () => {
 
       const ctx: CodeContext = {
         taskDescription: sampleCodeContext.taskDescription,
-        acceptanceCriteria: sampleCodeContext.acceptanceCriteria,
         codeChanges: sampleCodeContext.codeChanges,
         // no commitMessage
       };
@@ -553,25 +534,6 @@ describe('CodeVerifier', () => {
   // verify() — workflow event actor
   // -------------------------------------------------------------------------
 
-  describe('verify() — workflow event metadata', () => {
-    it('should set actor to "code_verifier" in the workflow event', async () => {
-      const mockLlm = createMockLlm([passedLlmResult]);
-      const verifier = new CodeVerifier({ llm: mockLlm, retrySleep: noopSleep });
-
-      await verifier.verify('task-123', sampleCodeContext);
-
-      const [, calledEvent] = vi.mocked(advanceWorkflow).mock.calls[0];
-      expect(calledEvent.actor).toBe('code_verifier');
-    });
-
-    it('should include matchScore in the workflow event payload', async () => {
-      const mockLlm = createMockLlm([passedLlmResult]);
-      const verifier = new CodeVerifier({ llm: mockLlm, retrySleep: noopSleep });
-
-      await verifier.verify('task-123', sampleCodeContext);
-
-      const [, calledEvent] = vi.mocked(advanceWorkflow).mock.calls[0];
-      expect(calledEvent.payload['matchScore']).toBe(95);
-    });
-  });
+  // advanceWorkflow is no longer called by CodeVerifier — verify_code is report-only.
+  // State advancement is handled by advance_task tool.
 });

@@ -40,7 +40,6 @@ export interface ActionItem {
   suggestedAssignee?: string;
   /** IDs of other action items this one depends on. */
   dependencies: string[];
-  acceptanceCriteria: string[];
 }
 
 // ---------------------------------------------------------------------------

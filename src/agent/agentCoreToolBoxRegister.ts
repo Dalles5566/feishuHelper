@@ -185,10 +185,9 @@ export function registerTools(feishuClient: any): DynamicStructuredTool[] {
         task_type: z.enum(['feature', 'bugfix']).optional().describe('Task type: "feature" (prefix F-) or "bugfix" (prefix B-). Defaults to "feature"'),
         priority: z.enum(['high', 'medium', 'low']).optional().describe('Task priority. Defaults to "medium"'),
         assignee_open_id: z.string().optional().describe('Feishu open_id of the assignee. Look up via query_sql from employees table if needed'),
-        acceptance_criteria: z.array(z.string()).optional().describe('List of acceptance criteria for the task. Extract from meeting analysis action items.'),
         dependencies: z.array(z.string()).optional().describe('List of task dependencies (other task display_ids or descriptions). Extract from meeting analysis.'),
       }),
-      func: async ({ summary, description, due_date, meeting_id, task_type, priority, assignee_open_id, acceptance_criteria, dependencies }) => {
+      func: async ({ summary, description, due_date, meeting_id, task_type, priority, assignee_open_id, dependencies }) => {
         try {
           const { TaskManager } = await import('../services/taskManager.js');
           const taskManager = new TaskManager({ feishuClient });
@@ -196,7 +195,6 @@ export function registerTools(feishuClient: any): DynamicStructuredTool[] {
           const task = await taskManager.createTask({
             title: summary,
             description: description || '',
-            acceptanceCriteria: acceptance_criteria || [],
             dependencies: dependencies || [],
             priority: priority || 'medium',
             sourceActionItemId: `agent-${Date.now()}`,
@@ -240,7 +238,7 @@ export function registerTools(feishuClient: any): DynamicStructuredTool[] {
     // Tool 4: Update task fields
     new DynamicStructuredTool({
       name: 'update_task',
-      description: 'Update one or more fields of a task. Supports title, description, priority, due_date, and acceptance_criteria. All fields are optional — only provide the ones you want to change. A reason is required to track why the update was made.',
+      description: 'Update one or more fields of a task. Supports title, description, priority, and due_date. All fields are optional — only provide the ones you want to change. A reason is required to track why the update was made.',
       schema: z.object({
         task_id: z.string().describe('The task ID (UUID) or display_id (e.g. F-000001) to update'),
         reason: z.string().describe('Reason for the update (e.g. "Meeting update on 2026-05-16", "Priority raised per PM request")'),
@@ -248,9 +246,8 @@ export function registerTools(feishuClient: any): DynamicStructuredTool[] {
         description: z.string().optional().describe('New description for the task'),
         priority: z.enum(['high', 'medium', 'low']).optional().describe('New priority'),
         due_date: z.string().optional().describe('New due date in YYYY-MM-DD format. Set to empty string to clear.'),
-        acceptance_criteria: z.array(z.string()).optional().describe('New acceptance criteria (replaces existing list)'),
       }),
-      func: async ({ task_id, reason, title, description, priority, due_date, acceptance_criteria }) => {
+      func: async ({ task_id, reason, title, description, priority, due_date }) => {
         try {
           const { queryOne, update: dbUpdate } = await import('../utils/db.js');
 
@@ -273,7 +270,7 @@ export function registerTools(feishuClient: any): DynamicStructuredTool[] {
             const { TaskManager } = await import('../services/taskManager.js');
             const taskManager = new TaskManager({ feishuClient });
             await taskManager.updateTaskDescription(resolvedTaskId, description, reason);
-          } else if (sets.length === 0 && !priority && due_date === undefined && !acceptance_criteria) {
+          } else if (sets.length === 0 && !priority && due_date === undefined) {
             return '❌ 没有提供要更新的字段。';
           }
           if (priority !== undefined) {
@@ -283,10 +280,6 @@ export function registerTools(feishuClient: any): DynamicStructuredTool[] {
           if (due_date !== undefined) {
             sets.push(`due_date = $${paramIdx++}`);
             params.push(due_date === '' ? null : due_date);
-          }
-          if (acceptance_criteria !== undefined) {
-            sets.push(`acceptance_criteria = $${paramIdx++}`);
-            params.push(JSON.stringify(acceptance_criteria));
           }
 
           if (sets.length > 0) {
@@ -553,7 +546,7 @@ Invalid transitions will be rejected.`,
           }
 
           const taskRow = await queryOne<any>(
-            'SELECT title, description, acceptance_criteria FROM tasks WHERE id = $1',
+            'SELECT title, description FROM tasks WHERE id = $1',
             [resolvedTaskId],
           );
           if (!taskRow) return `❌ 任务不存在: ${task_id}`;
@@ -561,15 +554,8 @@ Invalid transitions will be rejected.`,
           const { CodeVerifier } = await import('../services/codeVerifier.js');
           const verifier = new CodeVerifier();
 
-          const acceptanceCriteria = Array.isArray(taskRow.acceptance_criteria)
-            ? taskRow.acceptance_criteria
-            : (typeof taskRow.acceptance_criteria === 'string'
-              ? JSON.parse(taskRow.acceptance_criteria || '[]')
-              : []);
-
           const report = await verifier.verify(resolvedTaskId, {
             taskDescription: taskRow.description,
-            acceptanceCriteria,
             codeChanges: code_changes || '(No code provided — reference report based on requirements)',
           });
 
@@ -612,22 +598,10 @@ Generates positive, negative, and boundary test cases. Auto-advances state: InDe
           const { DocGenerator } = await import('../services/docGenerator.js');
           const generator = new DocGenerator();
 
-          const acceptanceCriteria = Array.isArray(taskRow.acceptance_criteria)
-            ? taskRow.acceptance_criteria
-            : (typeof taskRow.acceptance_criteria === 'string'
-              ? JSON.parse(taskRow.acceptance_criteria || '[]')
-              : []);
-
-          // If no acceptance criteria, generate based on description
-          const criteriaForDoc = acceptanceCriteria.length > 0
-            ? acceptanceCriteria
-            : [`完成任务: ${taskRow.title}`];
-
           const testDoc = await generator.generateTestDocument({
             id: resolvedTaskId,
             title: taskRow.title,
             description: taskRow.description || '',
-            acceptanceCriteria: criteriaForDoc,
             dependencies: [],
             priority: 'medium',
             state: 'InDevelopment',

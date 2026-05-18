@@ -629,3 +629,29 @@
 
 - **sync_task 是侦察工具，不是执行工具**：发现变更后告诉 LLM，LLM 用已有工具（update_task、assign_task）处理
 - **acceptance_criteria 不再独立维护**：该字段与 description 经常不同步，且飞书 API 不返回此字段。决定在下次提交中废弃，改为直接从 description 推断验收标准
+
+---
+
+## 2026-05-18（周一，续）
+
+### 今日完成内容（续）
+
+- 完成方案 B：彻底删除 `acceptance_criteria` 字段
+
+  - **原因**：`acceptance_criteria` 是从 description 里提炼出来的结构化版本，但两者经常不同步，且飞书 API 不返回此字段，维护成本高于价值
+  - **改动范围**：
+    - `migrations/schema.sql` — 删除 `acceptance_criteria JSONB` 列
+    - `src/models/task.ts` — 从 `Task` 和 `TaskCreateParams` 接口删除字段
+    - `src/models/meeting.ts` — 从 `ActionItem` 接口删除字段
+    - `src/models/verification.ts` — 从 `CodeContext` 接口删除字段
+    - `src/services/taskManager.ts` — 从 INSERT SQL 和 mapRow 删除
+    - `src/services/meetingAnalyzer.ts` — 从 Zod schema 删除
+    - `src/workflow/workflowEngine.ts` — 从 INSERT SQL 删除
+    - `src/queue/index.ts` — 从队列消息类型删除
+    - `src/agent/agentCoreToolBoxRegister.ts` — 从工具参数删除
+    - `src/agent/agentCore.ts` — 从 system prompt 的 schema 描述删除
+  - **docGenerator 和 codeVerifier 更新**：
+    - system prompt 改为"先从任务描述中提取验收标准，再生成测试用例/验证代码"
+    - user prompt 明确指示 LLM 自己从 description 里提取标准
+    - 不再需要代码层面传 criteriaList
+  - 所有相关测试更新完毕，无新增失败

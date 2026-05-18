@@ -61,9 +61,11 @@ const testDocumentResultSchema = z.object({
 // Prompts
 // ---------------------------------------------------------------------------
 
-const TEST_GENERATION_SYSTEM_PROMPT = `You are an expert QA engineer. Your job is to generate comprehensive test cases from a task's description and acceptance criteria.
+const TEST_GENERATION_SYSTEM_PROMPT = `You are an expert QA engineer. Your job is to generate comprehensive test cases from a task description.
 
-You MUST generate test cases that cover:
+First, extract the acceptance criteria from the task description. The description may contain explicit criteria (e.g. "must", "should", "验收标准", numbered lists) or implicit requirements that can be inferred from the context.
+
+Then generate test cases that cover:
 1. **Positive test cases**: Verify the feature works correctly under normal/expected conditions (happy path)
 2. **Negative test cases**: Verify the system handles errors, invalid inputs, and failure scenarios gracefully
 3. **Boundary condition test cases**: Verify behavior at the edges of valid input ranges, limits, and transitions
@@ -194,15 +196,6 @@ export class DocGenerator {
         'Provide a task with a non-empty title.',
       );
     }
-
-    if (!task.acceptanceCriteria || task.acceptanceCriteria.length === 0) {
-      throw AppError.validation(
-        ValidationErrorCodes.MISSING_FIELD,
-        'Task acceptance criteria are required for test document generation',
-        { taskId: task.id },
-        'Provide a task with at least one acceptance criterion.',
-      );
-    }
   }
 
   /**
@@ -253,10 +246,6 @@ export class DocGenerator {
    * Build the user-facing prompt for test case generation.
    */
   private buildTestGenerationPrompt(task: Task): string {
-    const criteriaList = task.acceptanceCriteria
-      .map((c, i) => `${i + 1}. ${c}`)
-      .join('\n');
-
     const dependenciesSection =
       task.dependencies.length > 0
         ? `\n## Dependencies\n${task.dependencies.map((d, i) => `${i + 1}. ${d}`).join('\n')}\n`
@@ -265,10 +254,10 @@ export class DocGenerator {
     return (
       `## Task Title\n${task.title}\n\n` +
       `## Task Description\n${task.description}\n\n` +
-      `## Acceptance Criteria\n${criteriaList}\n` +
       dependenciesSection +
       `\n## Priority\n${task.priority}\n\n` +
-      `Please generate comprehensive test cases covering positive, negative, and boundary conditions. ` +
+      `Please first extract the acceptance criteria from the task description above, ` +
+      `then generate comprehensive test cases (positive, negative, boundary) based on those criteria. ` +
       `If the task description lacks sufficient detail for certain test scenarios, list the missing information.`
     );
   }

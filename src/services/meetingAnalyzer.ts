@@ -45,9 +45,6 @@ const actionItemSchema = z.object({
   dependencies: z
     .array(z.string())
     .describe('IDs of other action items this one depends on'),
-  acceptanceCriteria: z
-    .array(z.string())
-    .describe('Criteria that must be met for this item to be considered complete'),
 });
 
 const decisionSchema = z.object({

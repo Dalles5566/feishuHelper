@@ -38,7 +38,6 @@ interface TaskRow extends Record<string, unknown> {
   task_type: string;
   title: string;
   description: string;
-  acceptance_criteria: string[];
   dependencies: string[];
   priority: string;
   state: string;
@@ -108,17 +107,16 @@ export class TaskManager {
     const prefix = taskType === 'bugfix' ? 'B-' : 'F-';
     const row = await insert<TaskRow>(
       `INSERT INTO tasks (
-        title, description, acceptance_criteria, dependencies,
+        title, description, dependencies,
         priority, state, source_action_item_id,
         retry_count, description_history, task_type, display_id, assignee_id, due_date
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
-        $11 || LPAD(nextval('task_display_id_seq')::text, 6, '0'), $12, $13
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9,
+        $10 || LPAD(nextval('task_display_id_seq')::text, 6, '0'), $11, $12
       )
       RETURNING *`,
       [
         params.title,
         params.description,
-        JSON.stringify(params.acceptanceCriteria),
         JSON.stringify(params.dependencies),
         params.priority,
         'Created',
@@ -567,9 +565,6 @@ export class TaskManager {
       taskType: (row.task_type as 'feature' | 'bugfix') || 'feature',
       title: row.title,
       description: row.description,
-      acceptanceCriteria: Array.isArray(row.acceptance_criteria)
-        ? row.acceptance_criteria
-        : JSON.parse(row.acceptance_criteria as unknown as string),
       dependencies: Array.isArray(row.dependencies)
         ? row.dependencies
         : JSON.parse(row.dependencies as unknown as string),

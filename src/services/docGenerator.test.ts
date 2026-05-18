@@ -48,12 +48,6 @@ const sampleTask: Task = {
   title: 'Implement user login with email and password',
   description:
     'Create a login endpoint that accepts email and password, validates credentials against the database, and returns a JWT token on success.',
-  acceptanceCriteria: [
-    'User can submit email and password to the login endpoint',
-    'Valid credentials return a JWT token with user ID claim',
-    'Invalid credentials return HTTP 401 with error message',
-    'Account locked after 5 failed attempts',
-  ],
   dependencies: ['User registration must be implemented'],
   priority: 'high',
   state: 'VerificationPassed',
@@ -69,7 +63,6 @@ const minimalTask: Task = {
   id: 'task-002',
   title: 'Fix button color',
   description: 'Change button color',
-  acceptanceCriteria: ['Button should be blue'],
   dependencies: [],
   priority: 'low',
   state: 'VerificationPassed',
@@ -358,15 +351,12 @@ describe('DocGenerator', () => {
       });
     });
 
-    it('should throw VALIDATION_MISSING_FIELD for empty acceptance criteria', async () => {
-      const mockLlm = createMockLlm([]);
+    it('should succeed even with no acceptanceCriteria field (removed field)', async () => {
+      const mockLlm = createMockLlm([fullLlmResult]);
       const generator = new DocGenerator({ llm: mockLlm, retrySleep: noopSleep });
 
-      const task = { ...sampleTask, acceptanceCriteria: [] };
-      await expect(generator.generateTestDocument(task)).rejects.toMatchObject({
-        code: 'VALIDATION_MISSING_FIELD',
-        category: 'validation',
-      });
+      const result = await generator.generateTestDocument(sampleTask);
+      expect(result.testCases.length).toBeGreaterThan(0);
     });
   });
 

@@ -72,12 +72,12 @@ const VERIFICATION_SYSTEM_PROMPT = `You are an expert code reviewer. Your job is
 
 You will be given:
 1. A task description explaining what needs to be implemented
-2. A list of acceptance criteria that must be satisfied
-3. The code changes (as a diff or code snippet)
-4. An optional commit message
+2. The code changes (as a diff or code snippet)
+3. An optional commit message
 
 Your job is to:
-- Evaluate each acceptance criterion against the code changes
+- First extract the acceptance criteria from the task description (look for explicit criteria, numbered requirements, "must"/"should" statements, or implicit requirements)
+- Evaluate each extracted criterion against the code changes
 - Assign a match score from 0 to 100
 - List which criteria are met and which are not
 - Identify specific discrepancies with severity levels
@@ -184,7 +184,7 @@ export class CodeVerifier {
           status: 'ambiguous',
           matchScore: 0,
           matchedCriteria: [],
-          unmatchedCriteria: codeContext.acceptanceCriteria,
+          unmatchedCriteria: [],
           discrepancies: [],
           recommendations: [
             'Code diff is too large for AI analysis. Please have QA review the changes manually.',
@@ -282,15 +282,6 @@ export class CodeVerifier {
         'Provide the code changes (diff or snippet) in the code context.',
       );
     }
-
-    if (!codeContext.acceptanceCriteria || codeContext.acceptanceCriteria.length === 0) {
-      throw AppError.validation(
-        ValidationErrorCodes.MISSING_FIELD,
-        'Acceptance criteria are required for code verification',
-        { taskId },
-        'Provide at least one acceptance criterion in the code context.',
-      );
-    }
   }
 
   /**
@@ -362,20 +353,16 @@ export class CodeVerifier {
    * Build the user-facing verification prompt from the code context.
    */
   private buildVerificationPrompt(codeContext: CodeContext): string {
-    const criteriaList = codeContext.acceptanceCriteria
-      .map((c, i) => `${i + 1}. ${c}`)
-      .join('\n');
-
     const commitSection = codeContext.commitMessage
       ? `\n## Commit Message\n${codeContext.commitMessage}\n`
       : '';
 
     return (
       `## Task Description\n${codeContext.taskDescription}\n\n` +
-      `## Acceptance Criteria\n${criteriaList}\n` +
       commitSection +
       `\n## Code Changes\n\`\`\`\n${codeContext.codeChanges}\n\`\`\`\n\n` +
-      `Please verify whether the code changes correctly implement all acceptance criteria.`
+      `Please first extract the acceptance criteria from the task description above, ` +
+      `then verify whether the code changes correctly implement each criterion.`
     );
   }
 

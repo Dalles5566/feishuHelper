@@ -63,7 +63,6 @@ const sampleTaskRow = {
   id: 'task-123',
   title: 'Implement login',
   description: 'Implement user login with OAuth',
-  acceptance_criteria: ['User can login', 'Token is stored'],
   dependencies: ['dep-1'],
   priority: 'high',
   state: 'Created',
@@ -82,7 +81,6 @@ const sampleTaskRow = {
 const sampleCreateParams = {
   title: 'Implement login',
   description: 'Implement user login with OAuth',
-  acceptanceCriteria: ['User can login', 'Token is stored'],
   dependencies: ['dep-1'],
   priority: 'high' as const,
   sourceActionItemId: 'action-789',
@@ -427,7 +425,6 @@ describe('TaskManager', () => {
       expect(result).not.toBeNull();
       expect(result!.id).toBe('task-123');
       expect(result!.title).toBe('Implement login');
-      expect(result!.acceptanceCriteria).toEqual(['User can login', 'Token is stored']);
     });
 
     it('should return null if task not found', async () => {

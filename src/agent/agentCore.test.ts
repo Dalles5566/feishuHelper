@@ -367,7 +367,8 @@ describe('AgentCore', () => {
       expect(toolNames).toContain('verify_code');
       expect(toolNames).toContain('generate_test_doc');
       expect(toolNames).toContain('submit_qa_feedback');
-      expect(tools.length).toBe(9);
+      expect(toolNames).toContain('sync_task');
+      expect(tools.length).toBe(10);
     });
 
     it('should have descriptions for all registered tools', async () => {

@@ -16,7 +16,6 @@
  */
 export interface CodeContext {
   taskDescription: string;
-  acceptanceCriteria: string[];
   /** A unified diff or code snippet representing the changes to verify. */
   codeChanges: string;
   commitMessage?: string;

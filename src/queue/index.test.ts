@@ -364,8 +364,7 @@ describe('Queue Module', () => {
           context: 'Discussed in meeting',
           priority: 'high',
           dependencies: [],
-          acceptanceCriteria: ['Criteria 1'],
-        },
+          acceptanceCriteria: ['Criteria 1'],        },
       };
       const job = await addTaskCreationJob(data);
       expect(job).toBeDefined();
@@ -477,7 +476,6 @@ describe('Queue Module', () => {
             context: 'Context',
             priority: 'medium',
             dependencies: [],
-            acceptanceCriteria: [],
           },
         });
         await expect(taskCreationProcessor(job)).resolves.toBeUndefined();
@@ -492,7 +490,6 @@ describe('Queue Module', () => {
             context: 'Context',
             priority: 'medium',
             dependencies: [],
-            acceptanceCriteria: [],
           },
         });
         await expect(taskCreationProcessor(job)).rejects.toThrow('Missing required fields');

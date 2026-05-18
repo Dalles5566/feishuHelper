@@ -633,3 +633,29 @@
 
 - **sync_task is a scout tool, not an executor**: reports changes to LLM, LLM uses existing tools (update_task, assign_task) to apply them
 - **acceptance_criteria will be deprecated**: the field is frequently out of sync with description, and Feishu API doesn't return it. Decision: deprecate in next commit, infer acceptance criteria directly from description
+
+---
+
+## 2026-05-18 (Monday, continued)
+
+### What was done today (continued)
+
+- Completed Option B: fully removed `acceptance_criteria` field
+
+  - **Reason**: `acceptance_criteria` was a structured extract of `description`, but the two were frequently out of sync, Feishu API doesn't return this field, and maintenance cost exceeded its value
+  - **Scope of changes**:
+    - `migrations/schema.sql` — removed `acceptance_criteria JSONB` column
+    - `src/models/task.ts` — removed from `Task` and `TaskCreateParams` interfaces
+    - `src/models/meeting.ts` — removed from `ActionItem` interface
+    - `src/models/verification.ts` — removed from `CodeContext` interface
+    - `src/services/taskManager.ts` — removed from INSERT SQL and mapRow
+    - `src/services/meetingAnalyzer.ts` — removed from Zod schema
+    - `src/workflow/workflowEngine.ts` — removed from INSERT SQL
+    - `src/queue/index.ts` — removed from queue message type
+    - `src/agent/agentCoreToolBoxRegister.ts` — removed from tool parameters
+    - `src/agent/agentCore.ts` — removed from system prompt schema description
+  - **docGenerator and codeVerifier updated**:
+    - System prompt updated to "first extract acceptance criteria from the task description, then generate test cases / verify code"
+    - User prompt explicitly instructs LLM to extract criteria from description itself
+    - No longer need to pass criteriaList at the code level
+  - All related tests updated, no new failures introduced

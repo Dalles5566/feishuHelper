@@ -56,7 +56,6 @@ export interface TaskCreationJobData {
     priority: 'high' | 'medium' | 'low';
     suggestedAssignee?: string;
     dependencies: string[];
-    acceptanceCriteria: string[];
   };
 }
 

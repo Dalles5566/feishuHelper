@@ -55,11 +55,9 @@ export interface Task {
   taskType: 'feature' | 'bugfix';
   title: string;
   description: string;
-  acceptanceCriteria: string[];
   dependencies: string[];
   priority: 'high' | 'medium' | 'low';
-  state: TaskState;
-  /** Feishu user ID of the assigned developer. */
+  state: TaskState;  /** Feishu user ID of the assigned developer. */
   assignee?: string;
   /** Present when this task is a subtask of another task. */
   parentTaskId?: string;
@@ -109,7 +107,6 @@ export interface SubTask {
 export interface TaskCreateParams {
   title: string;
   description: string;
-  acceptanceCriteria: string[];
   dependencies: string[];
   priority: 'high' | 'medium' | 'low';
   sourceActionItemId: string;
