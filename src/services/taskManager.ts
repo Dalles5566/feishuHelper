@@ -275,15 +275,14 @@ export class TaskManager {
       // Persist subtask in the database
       const row = await insert<Record<string, unknown>>(
         `INSERT INTO tasks (
-          title, description, acceptance_criteria, dependencies,
+          title, description, dependencies,
           priority, state, parent_task_id, source_action_item_id,
           feishu_task_id, retry_count, description_history
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
         RETURNING *`,
         [
           subtaskParams.title,
           subtaskParams.description,
-          JSON.stringify([]),
           JSON.stringify([]),
           parentTask.priority,
           'Created',

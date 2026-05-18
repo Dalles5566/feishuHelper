@@ -659,3 +659,19 @@
     - User prompt explicitly instructs LLM to extract criteria from description itself
     - No longer need to pass criteriaList at the code level
   - All related tests updated, no new failures introduced
+
+
+### What was done today (continued 2)
+
+- Fixed `generate_test_doc` tool error: SQL query referenced the removed `acceptance_criteria` column
+- Fixed `taskManager.splitTask` same issue
+- Updated `verify_code` tool description text to remove `acceptance_criteria` references
+- Added `updated_description` parameter to `submit_qa_feedback` tool
+  - When QA fails and user provides updated requirements, pass them directly to update description + record history in one step
+  - Internally calls `TaskManager.updateTaskDescription()`, history reason is the QA failure details
+  - Without `updated_description`, behavior is unchanged (only appends history)
+- Fixed `syncDescriptionToFeishu` empty history line issue
+  - Root cause: empty string `event` was still pushed to history, creating `[2026-05-18] ` blank lines in Feishu description
+  - Fix: skip history.push when event is empty
+  - Extra safeguard: filter out entries with empty `reason` when rendering history
+  - When event is empty, re-read latest description from DB (since `updateTaskDescription` may have just written a new value)

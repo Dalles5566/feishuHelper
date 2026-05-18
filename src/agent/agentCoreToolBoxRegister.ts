@@ -49,27 +49,47 @@ async function syncDescriptionToFeishu(
       ? taskRow.description_history
       : JSON.parse(taskRow.description_history || '[]');
 
-    history.push({
-      previousDescription: '',
-      newDescription: '',
-      reason: event,
-      updatedBy: 'system',
-      updatedAt: new Date().toISOString(),
-    });
+    // Only append a history entry if event is non-empty
+    if (event && event.trim()) {
+      history.push({
+        previousDescription: '',
+        newDescription: '',
+        reason: event,
+        updatedBy: 'system',
+        updatedAt: new Date().toISOString(),
+      });
 
-    await dbUpdate(
-      `UPDATE tasks SET description_history = $1, updated_at = NOW() WHERE id = $2`,
-      [JSON.stringify(history), taskId],
-    );
+      await dbUpdate(
+        `UPDATE tasks SET description_history = $1, updated_at = NOW() WHERE id = $2`,
+        [JSON.stringify(history), taskId],
+      );
+    }
 
-    // Build Feishu description: content + history log
+    // Build Feishu description: re-read description from DB in case it was just updated
+    // (e.g. when called after updateTaskDescription with empty event)
+    const freshDesc = event && event.trim()
+      ? (taskRow.description || '')
+      : await (async () => {
+          const fresh = await queryOne<any>('SELECT description, description_history FROM tasks WHERE id = $1', [taskId]);
+          // Use fresh history too if we didn't push a new entry
+          if (fresh) {
+            const freshHistory = Array.isArray(fresh.description_history)
+              ? fresh.description_history
+              : JSON.parse(fresh.description_history || '[]');
+            history.length = 0;
+            history.push(...freshHistory);
+          }
+          return fresh?.description || taskRow.description || '';
+        })();
+
     const historyText = history
       .slice()
       .reverse()
+      .filter((h: any) => h.reason && String(h.reason).trim())
       .map((h: any) => `[${h.updatedAt?.split('T')[0] || ''}] ${h.reason}`)
       .join('\n');
 
-    const feishuDesc = `${taskRow.description || ''}\n\n--- 变更历史 ---\n${historyText}`;
+    const feishuDesc = `${freshDesc}\n\n--- 变更历史 ---\n${historyText}`;
 
     // Sync to Feishu
     await feishuClient.task.v2.task.patch({
@@ -527,8 +547,8 @@ Invalid transitions will be rejected.`,
     new DynamicStructuredTool({
       name: 'verify_code',
       description: `Verify code changes against task requirements. Generates a verification report as reference for QA.
-- If code_changes is provided (git diff), AI will analyze the code against acceptance criteria.
-- If no code_changes, AI generates a reference report based on task description and acceptance criteria.
+- If code_changes is provided (git diff), AI will analyze the code against the task description.
+- If no code_changes, AI generates a reference report based on task description only.
 - This tool does NOT change task state. Use advance_task("dev_complete") to move to QAPending.`,
       schema: z.object({
         task_id: z.string().describe('The task ID (UUID) or display_id (e.g. F-000001)'),
@@ -589,7 +609,7 @@ Generates positive, negative, and boundary test cases. Auto-advances state: InDe
 
           // Get task details
           const taskRow = await queryOne<any>(
-            'SELECT title, description, acceptance_criteria, state FROM tasks WHERE id = $1',
+            'SELECT title, description, state FROM tasks WHERE id = $1',
             [resolvedTaskId],
           );
           if (!taskRow) return `❌ 任务不存在: ${task_id}`;
@@ -681,16 +701,17 @@ Generates positive, negative, and boundary test cases. Auto-advances state: InDe
     new DynamicStructuredTool({
       name: 'submit_qa_feedback',
       description: `Submit QA test results for a task. This saves the feedback to qa_feedbacks table AND automatically advances the task state. Do NOT call advance_task separately after this.
-- result "passed": advances QAPending → QAPassed
-- result "failed" with failure_type "implementation_error": advances QAPending → QAFailed → InDevelopment
-- result "failed" with failure_type "requirement_error": advances QAPending → QAFailed → Created`,
+- result "passed": advances QAPending → QAPassed → Completed
+- result "failed": advances QAPending → QAFailed → InDevelopment
+- If the user provides updated requirements or a new description when reporting failure, pass it as "updated_description" — it will be saved and synced to Feishu automatically.`,
       schema: z.object({
         task_id: z.string().describe('The task ID (UUID) or display_id (e.g. F-000001)'),
         result: z.enum(['passed', 'failed']).describe('QA test result'),
         failure_type: z.enum(['implementation_error', 'requirement_error']).optional().describe('Type of failure (required if result is "failed")'),
         details: z.string().optional().describe('Detailed feedback: what failed, why, which test cases'),
+        updated_description: z.string().optional().describe('Updated task description reflecting the corrected requirements. Provide this when the user explains what needs to change after QA failure.'),
       }),
-      func: async ({ task_id, result, failure_type, details }) => {
+      func: async ({ task_id, result, failure_type, details, updated_description }) => {
         try {
           const { queryOne, insert } = await import('../utils/db.js');
 
@@ -733,8 +754,18 @@ Generates positive, negative, and boundary test cases. Auto-advances state: InDe
             // Failed: go through QAFailed, always back to InDevelopment
             await taskManager.updateTaskState(resolvedTaskId, 'QAFailed', details || 'QA failed');
             await taskManager.updateTaskState(resolvedTaskId, 'InDevelopment', 'QA failed — back to development');
-            await syncDescriptionToFeishu(resolvedTaskId, `QA 失败（${failure_type === 'requirement_error' ? '需求问题' : '实现问题'}）: ${details || '未说明'}`, feishuClient);
-            return `❌ QA 失败\n任务: ${task_id}\n状态: InDevelopment（需要继续开发）\n类型: ${failure_type || 'implementation_error'}\n原因: ${details || '未说明'}`;
+
+            // If updated description provided, save it and use it as the history reason
+            const failureReason = `QA 失败（${failure_type === 'requirement_error' ? '需求问题' : '实现问题'}）: ${details || '未说明'}`;
+            if (updated_description) {
+              await taskManager.updateTaskDescription(resolvedTaskId, updated_description, failureReason);
+              // syncDescriptionToFeishu will pick up the new description + history
+              await syncDescriptionToFeishu(resolvedTaskId, '', feishuClient);
+            } else {
+              await syncDescriptionToFeishu(resolvedTaskId, failureReason, feishuClient);
+            }
+
+            return `❌ QA 失败\n任务: ${task_id}\n状态: InDevelopment（需要继续开发）\n类型: ${failure_type || 'implementation_error'}\n原因: ${details || '未说明'}${updated_description ? '\n✏️ 描述已更新' : ''}`;
           }
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);

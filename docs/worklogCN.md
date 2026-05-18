@@ -655,3 +655,19 @@
     - user prompt 明确指示 LLM 自己从 description 里提取标准
     - 不再需要代码层面传 criteriaList
   - 所有相关测试更新完毕，无新增失败
+
+
+### 今日完成内容（续2）
+
+- 修复 `generate_test_doc` 工具报错：SQL 查询引用了已删除的 `acceptance_criteria` 列
+- 修复 `taskManager.splitTask` 同样的问题
+- 更新 `verify_code` 工具描述文字，移除 `acceptance_criteria` 相关措辞
+- `submit_qa_feedback` 工具新增 `updated_description` 参数
+  - QA 失败时如果用户提供了新的需求描述，直接传入即可同时更新描述和记录历史
+  - 内部调 `TaskManager.updateTaskDescription()`，历史记录的 reason 就是 QA 失败原因
+  - 不传 `updated_description` 时行为不变（只追加历史）
+- 修复 `syncDescriptionToFeishu` 空历史行问题
+  - 原因：`event` 为空字符串时仍然追加了一条空记录，导致飞书描述出现 `[2026-05-18] ` 空行
+  - 修复：`event` 为空时跳过 history.push，不追加空记录
+  - 额外防护：渲染历史时过滤掉 `reason` 为空的条目
+  - 当 `event` 为空时重新从 DB 读最新 description（因为 `updateTaskDescription` 可能刚写了新值）
