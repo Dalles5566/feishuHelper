@@ -587,3 +587,7 @@
 - Fixed CodeVerifier trying to advance to removed VerificationPassed state
   - Removed `advanceTaskWorkflow` call from CodeVerifier.verify() — now report-only
 - Fixed system prompt: clarified that submit_qa_feedback is only for QAPending tasks, other states use update_task
+
+- QA failure now always reverts to InDevelopment (no longer reverts to Created)
+  - Reason: assigned tasks reverting to Created is illogical; requirement changes can be handled via update_task
+  - failure_type is still recorded in qa_feedbacks table (for analytics), but state always goes back to InDevelopment

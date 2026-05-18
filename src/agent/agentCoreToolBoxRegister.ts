@@ -752,18 +752,11 @@ Generates positive, negative, and boundary test cases. Auto-advances state: InDe
             await syncDescriptionToFeishu(resolvedTaskId, `QA 通过，任务完成`, feishuClient);
             return `✅ QA 通过！任务已完成\n任务: ${task_id}\n状态: Completed`;
           } else {
-            // Failed: go through QAFailed first
+            // Failed: go through QAFailed, always back to InDevelopment
             await taskManager.updateTaskState(resolvedTaskId, 'QAFailed', details || 'QA failed');
-
-            if (failure_type === 'requirement_error') {
-              await taskManager.updateTaskState(resolvedTaskId, 'Created', 'Requirement error — back to discussion');
-              await syncDescriptionToFeishu(resolvedTaskId, `QA 失败（需求问题）: ${details || '未说明'}`, feishuClient);
-              return `❌ QA 失败（需求问题）\n任务: ${task_id}\n状态: Created（需要重新讨论需求）\n原因: ${details || '未说明'}`;
-            } else {
-              await taskManager.updateTaskState(resolvedTaskId, 'InDevelopment', 'Implementation error — back to dev');
-              await syncDescriptionToFeishu(resolvedTaskId, `QA 失败（实现问题）: ${details || '未说明'}`, feishuClient);
-              return `❌ QA 失败（实现问题）\n任务: ${task_id}\n状态: InDevelopment（需要继续开发）\n原因: ${details || '未说明'}`;
-            }
+            await taskManager.updateTaskState(resolvedTaskId, 'InDevelopment', 'QA failed — back to development');
+            await syncDescriptionToFeishu(resolvedTaskId, `QA 失败（${failure_type === 'requirement_error' ? '需求问题' : '实现问题'}）: ${details || '未说明'}`, feishuClient);
+            return `❌ QA 失败\n任务: ${task_id}\n状态: InDevelopment（需要继续开发）\n类型: ${failure_type || 'implementation_error'}\n原因: ${details || '未说明'}`;
           }
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);

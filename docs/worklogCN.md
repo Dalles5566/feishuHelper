@@ -583,3 +583,7 @@
 - 修复 CodeVerifier 尝试推进到已删除的 VerificationPassed 状态
   - 移除 CodeVerifier.verify() 中的 advanceTaskWorkflow 调用，现在只生成报告
 - 修复 system prompt：明确 submit_qa_feedback 只用于 QAPending 状态，其他状态用 update_task
+
+- QA 失败统一回退到 InDevelopment（不再区分回退到 Created）
+  - 原因：已分配的任务回到 Created 不合理；需求变更可以通过 update_task 处理
+  - failure_type 仍然记录在 qa_feedbacks 表（方便统计），但状态统一回到 InDevelopment
