@@ -16,6 +16,76 @@
 import { DynamicStructuredTool } from '@langchain/core/tools';
 import { z } from 'zod/v3';
 
+// ---------------------------------------------------------------------------
+// Helper: Sync task description to Feishu with history
+// ---------------------------------------------------------------------------
+
+/**
+ * Append an event to the task's description_history in DB,
+ * then sync the full description (content + history) to Feishu.
+ *
+ * Called internally by tools that modify task state/content.
+ */
+async function syncDescriptionToFeishu(
+  taskId: string,
+  event: string,
+  feishuClient: any,
+): Promise<void> {
+  try {
+    const { queryOne, update: dbUpdate } = await import('../utils/db.js');
+
+    // Append event to description_history
+    const taskRow = await queryOne<any>(
+      'SELECT feishu_task_id, display_id, description, description_history FROM tasks WHERE id = $1',
+      [taskId],
+    );
+    if (!taskRow?.feishu_task_id) return;
+
+    const history = Array.isArray(taskRow.description_history)
+      ? taskRow.description_history
+      : JSON.parse(taskRow.description_history || '[]');
+
+    history.push({
+      previousDescription: '',
+      newDescription: '',
+      reason: event,
+      updatedBy: 'system',
+      updatedAt: new Date().toISOString(),
+    });
+
+    await dbUpdate(
+      `UPDATE tasks SET description_history = $1, updated_at = NOW() WHERE id = $2`,
+      [JSON.stringify(history), taskId],
+    );
+
+    // Build Feishu description: content + history log
+    const historyText = history
+      .slice()
+      .reverse()
+      .map((h: any) => `[${h.updatedAt?.split('T')[0] || ''}] ${h.reason}`)
+      .join('\n');
+
+    const feishuDesc = `${taskRow.description || ''}\n\n--- 变更历史 ---\n${historyText}`;
+
+    // Sync to Feishu
+    await feishuClient.task.v2.task.patch({
+      path: { task_guid: taskRow.feishu_task_id },
+      params: { user_id_type: 'open_id' },
+      data: {
+        task: { description: feishuDesc },
+        update_fields: ['description'],
+      },
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[syncDescriptionToFeishu] Failed: ${msg}`);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Tool Registration
+// ---------------------------------------------------------------------------
+
 /**
  * Register all agent tools and return them as an array.
  * @param feishuClient - The initialized @larksuiteoapi/node-sdk Client instance
@@ -151,6 +221,10 @@ export function registerTools(feishuClient: any): DynamicStructuredTool[] {
           }
 
           const taskUrl = `https://applink.feishu.cn/client/todo/detail?guid=${task.feishuTaskId}`;
+
+          // Sync description with history to Feishu
+          await syncDescriptionToFeishu(task.id, `任务创建: ${summary}`, feishuClient);
+
           return `✅ 任务创建成功！\n编号: ${task.displayId}\n标题: ${summary}\n优先级: ${task.priority}\n链接: ${taskUrl}`;
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
@@ -217,9 +291,9 @@ export function registerTools(feishuClient: any): DynamicStructuredTool[] {
             await dbUpdate(`UPDATE tasks SET ${sets.join(', ')} WHERE id = $${paramIdx}`, params);
           }
 
-          // Sync to Feishu
+          // Sync title/due to Feishu if changed
           const taskRow = await queryOne<any>(
-            'SELECT feishu_task_id, display_id, description FROM tasks WHERE id = $1',
+            'SELECT feishu_task_id, display_id FROM tasks WHERE id = $1',
             [resolvedTaskId],
           );
           if (taskRow?.feishu_task_id) {
@@ -242,19 +316,44 @@ export function registerTools(feishuClient: any): DynamicStructuredTool[] {
               updateFields.push('due');
             }
 
-            const currentDesc = description ?? taskRow.description;
-            feishuUpdate.description = currentDesc;
-            updateFields.push('description');
+            if (updateFields.length > 0) {
+              try {
+                await feishuClient.task.v2.task.patch({
+                  path: { task_guid: taskRow.feishu_task_id },
+                  params: { user_id_type: 'open_id' },
+                  data: { task: feishuUpdate, update_fields: updateFields },
+                });
+              } catch (feishuErr) {
+                const errMsg = feishuErr instanceof Error ? feishuErr.message : String(feishuErr);
+                console.error(`[update_task] Feishu title/due sync failed: ${errMsg}`);
+              }
+            }
+          }
 
-            try {
-              await feishuClient.task.v2.task.patch({
-                path: { task_guid: taskRow.feishu_task_id },
-                params: { user_id_type: 'open_id' },
-                data: { task: feishuUpdate, update_fields: updateFields },
-              });
-            } catch (feishuErr) {
-              const errMsg = feishuErr instanceof Error ? feishuErr.message : String(feishuErr);
-              console.error(`[update_task] Feishu sync failed: ${errMsg}`);
+          // Sync description with history (skip if description was updated via TaskManager — it already records history)
+          if (description === undefined) {
+            await syncDescriptionToFeishu(resolvedTaskId, `更新: ${reason}`, feishuClient);
+          } else {
+            // TaskManager.updateTaskDescription already wrote to description_history,
+            // just sync the current state to Feishu without adding another history entry
+            const { queryOne: qo2 } = await import('../utils/db.js');
+            const freshRow = await qo2<any>(
+              'SELECT feishu_task_id, description, description_history FROM tasks WHERE id = $1',
+              [resolvedTaskId],
+            );
+            if (freshRow?.feishu_task_id) {
+              const hist = Array.isArray(freshRow.description_history)
+                ? freshRow.description_history
+                : JSON.parse(freshRow.description_history || '[]');
+              const histText = hist.slice().reverse().map((h: any) => `[${h.updatedAt?.split('T')[0] || ''}] ${h.reason}`).join('\n');
+              const desc = `${freshRow.description || ''}\n\n--- 变更历史 ---\n${histText}`;
+              try {
+                await feishuClient.task.v2.task.patch({
+                  path: { task_guid: freshRow.feishu_task_id },
+                  params: { user_id_type: 'open_id' },
+                  data: { task: { description: desc }, update_fields: ['description'] },
+                });
+              } catch { }
             }
           }
 
@@ -313,27 +412,11 @@ export function registerTools(feishuClient: any): DynamicStructuredTool[] {
             }
           }
 
-          // Track in description_history
+          // Sync to Feishu: add member
           const taskRow = await queryOne<any>(
-            'SELECT feishu_task_id, description_history FROM tasks WHERE id = $1',
+            'SELECT feishu_task_id FROM tasks WHERE id = $1',
             [resolvedTaskId],
           );
-          const history = Array.isArray(taskRow?.description_history)
-            ? taskRow.description_history
-            : JSON.parse(taskRow?.description_history || '[]');
-          history.push({
-            previousDescription: '',
-            newDescription: '',
-            reason: reason || `分配给 ${assignee_name}`,
-            updatedBy: 'agent',
-            updatedAt: new Date().toISOString(),
-          });
-          await dbUpdate(
-            `UPDATE tasks SET description_history = $1 WHERE id = $2`,
-            [JSON.stringify(history), resolvedTaskId],
-          );
-
-          // Sync to Feishu
           if (taskRow?.feishu_task_id) {
             try {
               await feishuClient.task.v2.task.addMembers({
@@ -345,9 +428,12 @@ export function registerTools(feishuClient: any): DynamicStructuredTool[] {
               });
             } catch (feishuErr) {
               const errMsg = feishuErr instanceof Error ? feishuErr.message : String(feishuErr);
-              console.error(`[assign_task] Feishu sync failed: ${errMsg}`);
+              console.error(`[assign_task] Feishu addMembers failed: ${errMsg}`);
             }
           }
+
+          // Sync description with history
+          await syncDescriptionToFeishu(resolvedTaskId, reason || `分配给 ${assignee_name}`, feishuClient);
 
           return `✅ 任务已分配给 ${assignee_name}\n任务: ${task_id}${reason ? `\n原因: ${reason}` : ''}`;
         } catch (err) {
@@ -637,6 +723,12 @@ Generates positive, negative, and boundary test cases. Auto-advances state: InDe
             resolvedTaskId = row.id;
           }
 
+          // Check task is in QAPending state
+          const stateRow = await queryOne<any>('SELECT state FROM tasks WHERE id = $1', [resolvedTaskId]);
+          if (stateRow?.state !== 'QAPending') {
+            return `❌ 任务当前不在 QA 阶段（当前状态: ${stateRow?.state}）。只有 QAPending 状态的任务才能提交 QA 反馈。如果要修改任务内容，请使用 update_task。`;
+          }
+
           // Save QA feedback to database
           await insert(
             `INSERT INTO qa_feedbacks (task_id, result, failure_type, details, reported_by, reported_at)
@@ -657,6 +749,7 @@ Generates positive, negative, and boundary test cases. Auto-advances state: InDe
           if (result === 'passed') {
             await taskManager.updateTaskState(resolvedTaskId, 'QAPassed', 'QA passed');
             await taskManager.updateTaskState(resolvedTaskId, 'Completed', 'QA passed — task completed');
+            await syncDescriptionToFeishu(resolvedTaskId, `QA 通过，任务完成`, feishuClient);
             return `✅ QA 通过！任务已完成\n任务: ${task_id}\n状态: Completed`;
           } else {
             // Failed: go through QAFailed first
@@ -664,9 +757,11 @@ Generates positive, negative, and boundary test cases. Auto-advances state: InDe
 
             if (failure_type === 'requirement_error') {
               await taskManager.updateTaskState(resolvedTaskId, 'Created', 'Requirement error — back to discussion');
+              await syncDescriptionToFeishu(resolvedTaskId, `QA 失败（需求问题）: ${details || '未说明'}`, feishuClient);
               return `❌ QA 失败（需求问题）\n任务: ${task_id}\n状态: Created（需要重新讨论需求）\n原因: ${details || '未说明'}`;
             } else {
               await taskManager.updateTaskState(resolvedTaskId, 'InDevelopment', 'Implementation error — back to dev');
+              await syncDescriptionToFeishu(resolvedTaskId, `QA 失败（实现问题）: ${details || '未说明'}`, feishuClient);
               return `❌ QA 失败（实现问题）\n任务: ${task_id}\n状态: InDevelopment（需要继续开发）\n原因: ${details || '未说明'}`;
             }
           }

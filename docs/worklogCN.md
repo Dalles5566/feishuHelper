@@ -571,3 +571,15 @@
   - QA 通过后自动完成任务（QAPending → QAPassed → Completed 一步到位）
   - submit_qa_feedback 结果为 passed 时也自动完成
   - 迁移了旧的 VerificationPassed 状态任务到 QAPending
+
+- 实现 `syncDescriptionToFeishu` 统一方法
+  - 每次事件发生时自动追加到 description_history 并同步完整描述（内容 + 历史）到飞书
+  - 在 create_feishu_task、assign_task、update_task、submit_qa_feedback 中自动调用
+  - LLM 不再在描述里写变更历史，只写内容；历史由代码自动管理
+  - 修复重复历史记录：update_task 改描述时不再双重记录
+- 完成 17.3.4：`submit_qa_feedback` 工具 + 状态守卫
+  - 如果任务不在 QAPending 状态则拒绝（防止 LLM 在 InDevelopment 状态误用）
+  - 返回有用的错误信息引导 LLM 使用 update_task
+- 修复 CodeVerifier 尝试推进到已删除的 VerificationPassed 状态
+  - 移除 CodeVerifier.verify() 中的 advanceTaskWorkflow 调用，现在只生成报告
+- 修复 system prompt：明确 submit_qa_feedback 只用于 QAPending 状态，其他状态用 update_task

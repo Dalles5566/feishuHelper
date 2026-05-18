@@ -213,10 +213,8 @@ export class CodeVerifier {
     // Persist the report to the database
     await this.persistReport(taskId, report, codeContext);
 
-    // Advance the workflow based on the verification outcome
-    if (!this.skipWorkflowAdvance) {
-      await this.advanceTaskWorkflow(taskId, report);
-    }
+    // Workflow advancement removed — state machine no longer has Verification states.
+    // The verify_code tool is now report-only; state advancement is handled by advance_task.
 
     return report;
   }

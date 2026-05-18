@@ -575,3 +575,15 @@
   - QA passed now auto-completes the task (QAPending → QAPassed → Completed in one step)
   - submit_qa_feedback with result "passed" also auto-completes
   - Migrated old tasks stuck in VerificationPassed to QAPending
+
+- Implemented `syncDescriptionToFeishu` unified helper method
+  - Automatically appends events to description_history and syncs full description (content + history) to Feishu
+  - Called internally by create_feishu_task, assign_task, update_task, submit_qa_feedback
+  - LLM no longer writes change history in description — only writes content; history is code-managed
+  - Fixed duplicate history entries: update_task with description change no longer double-records
+- Completed 17.3.4: `submit_qa_feedback` tool with state guard
+  - Rejects if task is not in QAPending state (prevents LLM from misusing it on InDevelopment tasks)
+  - Returns helpful error message directing LLM to use update_task instead
+- Fixed CodeVerifier trying to advance to removed VerificationPassed state
+  - Removed `advanceTaskWorkflow` call from CodeVerifier.verify() — now report-only
+- Fixed system prompt: clarified that submit_qa_feedback is only for QAPending tasks, other states use update_task
