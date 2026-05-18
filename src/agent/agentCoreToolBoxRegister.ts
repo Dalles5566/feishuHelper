@@ -11,6 +11,10 @@
  * 4. update_task - Update task fields (DB + Feishu sync)
  * 5. assign_task - Assign task to person (DB + Feishu addMembers)
  * 6. advance_task - Advance task state via workflow state machine
+ * 7. verify_code - AI code verification (report only, no state change)
+ * 8. generate_test_doc - Generate QA test document
+ * 9. submit_qa_feedback - Submit QA result and auto-advance state
+ * 10. sync_task - Pull latest task state from Feishu into local DB
  */
 
 import { DynamicStructuredTool } from '@langchain/core/tools';
@@ -761,6 +765,55 @@ Generates positive, negative, and boundary test cases. Auto-advances state: InDe
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
           return `❌ 提交 QA 反馈失败: ${msg}`;
+        }
+      },
+    }),
+    // Tool 10: Diff task against Feishu and let LLM apply changes via proper tools
+    new DynamicStructuredTool({
+      name: 'sync_task',
+      description: `Compare a task's current state in Feishu with the local database and return the differences.
+Call this when the user says they manually changed something in Feishu (e.g. "I updated the due date in Feishu, sync it").
+
+This tool is READ-ONLY — it only reports what changed. After calling this tool, YOU must apply the changes using the appropriate tools:
+- title or description changed → call update_task
+- due_date changed → call update_task
+- assignee changed → call assign_task
+
+This ensures history, Feishu sync, and state machine all work correctly.`,
+      schema: z.object({
+        task_id: z.string().describe('The task ID (UUID) or display_id (e.g. F-000001) to check'),
+      }),
+      func: async ({ task_id }) => {
+        try {
+          const { FeishuSyncService } = await import('../services/feishuSync.js');
+          const syncService = new FeishuSyncService({ feishuClient });
+
+          const result = await syncService.diff(task_id);
+
+          if (!result) {
+            return `⚠️ 任务 ${task_id} 不存在或没有关联飞书任务，无法对比。`;
+          }
+
+          if (result.diffs.length === 0) {
+            return `✅ 任务 ${task_id} 飞书与本地数据一致，无变更。`;
+          }
+
+          const fieldLabels: Record<string, string> = {
+            title: '标题',
+            description: '描述',
+            due_date: '截止日期',
+            assignee_id: '负责人',
+          };
+
+          const diffLines = result.diffs.map((d) => {
+            const label = fieldLabels[d.field] || d.field;
+            return `- ${label}: 本地="${d.localValue ?? '空'}" → 飞书="${d.feishuValue ?? '空'}"`;
+          }).join('\n');
+
+          return `检测到以下变更（任务 ${task_id}）：\n${diffLines}\n\n请根据以上变更调用对应工具更新本地数据。`;
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          return `❌ 同步对比失败: ${msg}`;
         }
       },
     }),

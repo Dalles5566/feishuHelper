@@ -337,7 +337,7 @@ Phase 1 完成了各模块的独立实现，但联调时发现 `@larksuiteoapi/l
     - 在 create_feishu_task、assign_task、update_task、submit_qa_feedback 中自动调用
     - LLM 不写历史，只写内容；历史由代码自动管理
 
-- [ ] 17.4 飞书数据同步
+- [x] 17.4 飞书数据同步
   - 方案待定：读时同步（操作前先从飞书 API 拉最新状态）或事件订阅
   - 解决手动在飞书上修改后本地 DB 不同步的问题
 

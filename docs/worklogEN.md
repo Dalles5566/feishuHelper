@@ -591,3 +591,45 @@
 - QA failure now always reverts to InDevelopment (no longer reverts to Created)
   - Reason: assigned tasks reverting to Created is illogical; requirement changes can be handled via update_task
   - failure_type is still recorded in qa_feedbacks table (for analytics), but state always goes back to InDevelopment
+
+---
+
+## 2026-05-18 (Monday)
+
+### What was done today
+
+- Completed Task 17.4: Feishu Data Synchronization
+
+- Implemented `FeishuSyncService` (`src/services/feishuSync.ts`)
+  - **Architecture decision**: `FeishuSyncService` is a pure read-only "scout" — it only compares Feishu vs local DB and returns a diff list, writing nothing
+  - Single public method `diff(taskId)`: pulls Feishu API → queries DB → returns `SyncDiff[]`
+  - Accepts both UUID and display_id (e.g. F-000001) as input
+  - Compares: title, description, due_date, assignee_id
+  - Strips `--- 变更历史 ---` history section from Feishu description before comparing (only compares user content)
+  - Normalizes due_date to YYYY-MM-DD before comparing (pg may return a Date object)
+  - State field is intentionally **not synced**: state can only change via the state machine (advance_task / submit_qa_feedback)
+  - 14 unit tests all passing
+
+- Registered `sync_task` tool (Tool 10) in AgentCore
+  - User says "I changed something in Feishu, please sync" → Agent calls `sync_task`
+  - Tool calls `FeishuSyncService.diff()`, gets diff list, returns it to LLM
+  - LLM decides which tools to call based on diffs: title/description/due_date changed → call `update_task`; assignee changed → call `assign_task`
+  - This ensures history, Feishu sync, and state machine all work correctly through normal flow
+
+- Fixed two bugs discovered from real runtime logs:
+  1. **due_date false positive**: pg returns a Date object; comparing directly with Feishu's YYYY-MM-DD string caused false "changed" detection. Fix: `normalizeDateString()` normalizes both sides before comparing
+  2. **state overwritten by Feishu**: when a Feishu task was marked complete, sync was directly setting local state to Completed, bypassing the state machine. Fix: completely removed state sync logic from `detectChanges`
+
+- Removed `last_synced_at` field
+  - In-memory `lastSyncMap` is sufficient for throttle control, no need to persist to DB
+  - Removed from `migrations/schema.sql` and all related code
+
+- Design evolution: went through three versions
+  1. **Version 1** (complex): FeishuSyncService wrote DB + Feishu description directly → caused duplicate/garbled Feishu description
+  2. **Version 2** (intermediate): FeishuSyncService wrote DB but not Feishu; sync_task tool called syncDescriptionToFeishu → still had format issues
+  3. **Version 3 (current)**: FeishuSyncService is pure read-only, returns diff only; LLM decides which tools to call
+
+### Architecture Decisions
+
+- **sync_task is a scout tool, not an executor**: reports changes to LLM, LLM uses existing tools (update_task, assign_task) to apply them
+- **acceptance_criteria will be deprecated**: the field is frequently out of sync with description, and Feishu API doesn't return it. Decision: deprecate in next commit, infer acceptance criteria directly from description

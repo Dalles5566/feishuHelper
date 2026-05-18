@@ -587,3 +587,45 @@
 - QA 失败统一回退到 InDevelopment（不再区分回退到 Created）
   - 原因：已分配的任务回到 Created 不合理；需求变更可以通过 update_task 处理
   - failure_type 仍然记录在 qa_feedbacks 表（方便统计），但状态统一回到 InDevelopment
+
+---
+
+## 2026-05-18（周一）
+
+### 今日完成内容
+
+- 完成 Task 17.4：飞书数据同步
+
+- 实现 `FeishuSyncService`（`src/services/feishuSync.ts`）
+  - **架构决策**：`FeishuSyncService` 是纯只读的"侦察员"，只负责对比飞书和本地 DB 的差异，不写任何东西
+  - 对外暴露单一方法 `diff(taskId)`：拉飞书 API → 查 DB → 返回差异列表（`SyncDiff[]`）
+  - 支持 UUID 和 display_id（如 F-000001）两种输入格式
+  - 对比字段：title、description、due_date、assignee_id
+  - description 对比时自动剥离 `--- 变更历史 ---` 分隔符后的历史段，只比较用户内容部分
+  - due_date 对比时统一格式化为 YYYY-MM-DD，避免 pg 返回 Date 对象导致误报
+  - state 字段**不同步**：状态只能通过状态机（advance_task / submit_qa_feedback）改变
+  - 14 个单元测试全部通过
+
+- 注册 `sync_task` 工具（Tool 10）到 AgentCore
+  - 用户说"我在飞书上改了点东西，同步一下" → Agent 调 `sync_task`
+  - 工具调用 `FeishuSyncService.diff()` 拿到差异列表，返回给 LLM
+  - LLM 根据差异决定调哪些工具：title/description/due_date 变了 → 调 `update_task`；assignee 变了 → 调 `assign_task`
+  - 这样历史记录、飞书同步、状态机都走正常流程，不会出现乱格式问题
+
+- 修复 `sync_task` 两个 bug（从实际运行日志发现）：
+  1. **due_date 误报**：pg 返回 Date 对象，直接和飞书的 YYYY-MM-DD 字符串比较导致误判为"有变更"。修复：`normalizeDateString()` 统一格式化后再比较
+  2. **state 被飞书覆盖**：飞书任务标记完成后，sync 把本地状态直接改成 Completed，绕过了状态机。修复：`detectChanges` 中完全移除 state 同步逻辑
+
+- 移除 `last_synced_at` 字段
+  - 节流控制用内存 `lastSyncMap` 就够了，不需要持久化到 DB
+  - 从 `migrations/schema.sql` 和所有相关代码中移除
+
+- 重构历史：经历了三个版本的设计演进
+  1. **版本 1**（复杂）：FeishuSyncService 自己写 DB + 写飞书描述，导致飞书描述重复乱格式
+  2. **版本 2**（中间）：FeishuSyncService 写 DB 但不写飞书，由 sync_task 工具调 syncDescriptionToFeishu，仍有格式问题
+  3. **版本 3（当前）**：FeishuSyncService 纯只读，只返回 diff，由 LLM 决定调哪些工具处理变更
+
+### 架构决策
+
+- **sync_task 是侦察工具，不是执行工具**：发现变更后告诉 LLM，LLM 用已有工具（update_task、assign_task）处理
+- **acceptance_criteria 不再独立维护**：该字段与 description 经常不同步，且飞书 API 不返回此字段。决定在下次提交中废弃，改为直接从 description 推断验收标准
