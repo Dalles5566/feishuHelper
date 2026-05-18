@@ -565,3 +565,9 @@
   - 一站式工具：存 QA 反馈到 qa_feedbacks 表 + 自动推进状态
   - 通过 → QAPassed；失败（实现错误）→ QAFailed → InDevelopment；失败（需求错误）→ QAFailed → Created
   - system prompt 明确要求：QA 反馈先调 submit_qa_feedback，再调 update_task 更新描述
+
+- 进一步简化状态机：移除 DocumentationUpdated 状态
+  - 最终流程：Created → Assigned → InDevelopment → QAPending → QAPassed → Completed
+  - QA 通过后自动完成任务（QAPending → QAPassed → Completed 一步到位）
+  - submit_qa_feedback 结果为 passed 时也自动完成
+  - 迁移了旧的 VerificationPassed 状态任务到 QAPending

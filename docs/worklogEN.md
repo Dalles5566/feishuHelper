@@ -569,3 +569,9 @@
   - One-stop tool: saves QA feedback to qa_feedbacks table + auto-advances state
   - Passed → QAPassed; Failed (implementation) → QAFailed → InDevelopment; Failed (requirement) → QAFailed → Created
   - System prompt explicitly requires: QA feedback calls submit_qa_feedback first, then update_task for description changes
+
+- Further simplified state machine: removed DocumentationUpdated state
+  - Final flow: Created → Assigned → InDevelopment → QAPending → QAPassed → Completed
+  - QA passed now auto-completes the task (QAPending → QAPassed → Completed in one step)
+  - submit_qa_feedback with result "passed" also auto-completes
+  - Migrated old tasks stuck in VerificationPassed to QAPending

@@ -21,7 +21,6 @@ export type TaskState =
   | 'QAPending'
   | 'QAPassed'
   | 'QAFailed'
-  | 'DocumentationUpdated'
   | 'Completed';
 
 // ---------------------------------------------------------------------------

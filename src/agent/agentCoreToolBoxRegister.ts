@@ -365,15 +365,13 @@ Valid events and their transitions:
 - "assigned": Created → Assigned (task has been assigned to someone)
 - "confirmed": Assigned → InDevelopment (developer confirms they will work on it)
 - "dev_complete": InDevelopment → QAPending (developer marks work as done, goes directly to QA)
-- "qa_passed": QAPending → QAPassed (QA testing passed)
-- "doc_updated": QAPassed → DocumentationUpdated (documentation updated)
-- "completed": DocumentationUpdated → Completed (all done)
+- "qa_passed": QAPending → QAPassed → Completed (QA testing passed, task is done)
 - "qa_failed_impl": QAPending → QAFailed → InDevelopment (QA failed due to implementation error)
 - "qa_failed_req": QAPending → QAFailed → Created (QA failed due to requirement error)
 Invalid transitions will be rejected.`,
       schema: z.object({
         task_id: z.string().describe('The task ID (UUID) or display_id (e.g. F-000001)'),
-        event: z.string().describe('The workflow event: assigned, confirmed, dev_complete, qa_passed, doc_updated, completed, qa_failed_impl, qa_failed_req'),
+        event: z.string().describe('The workflow event: assigned, confirmed, dev_complete, qa_passed, qa_failed_impl, qa_failed_req'),
         reason: z.string().optional().describe('Reason for the state change'),
       }),
       func: async ({ task_id, event, reason }) => {
@@ -392,8 +390,6 @@ Invalid transitions will be rejected.`,
             confirmed: 'InDevelopment',
             dev_complete: 'QAPending',
             qa_passed: 'QAPassed',
-            doc_updated: 'DocumentationUpdated',
-            completed: 'Completed',
             qa_failed_impl: 'InDevelopment',
             qa_failed_req: 'Created',
           };
@@ -426,6 +422,15 @@ Invalid transitions will be rejected.`,
             targetState as any,
             reason || event,
           );
+
+          // Handle QA passed: auto-advance QAPassed → Completed
+          if (event === 'qa_passed' && task.state === 'QAPassed') {
+            try {
+              await taskManager.updateTaskState(resolvedTaskId, 'Completed', 'QA passed — task completed');
+            } catch {
+              // Non-critical
+            }
+          }
 
           return `✅ 任务状态已更新\n任务: ${task_id}\n新状态: ${task.state}${reason ? `\n原因: ${reason}` : ''}`;
         } catch (err) {
@@ -651,7 +656,8 @@ Generates positive, negative, and boundary test cases. Auto-advances state: InDe
 
           if (result === 'passed') {
             await taskManager.updateTaskState(resolvedTaskId, 'QAPassed', 'QA passed');
-            return `✅ QA 通过！\n任务: ${task_id}\n状态: QAPassed`;
+            await taskManager.updateTaskState(resolvedTaskId, 'Completed', 'QA passed — task completed');
+            return `✅ QA 通过！任务已完成\n任务: ${task_id}\n状态: Completed`;
           } else {
             // Failed: go through QAFailed first
             await taskManager.updateTaskState(resolvedTaskId, 'QAFailed', details || 'QA failed');

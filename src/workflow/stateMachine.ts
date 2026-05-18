@@ -23,7 +23,7 @@ import { clientQuery, withTransaction } from '../utils/db.js';
  * Any pair not in this set is an illegal transition.
  */
 const VALID_TRANSITIONS: ReadonlySet<string> = new Set([
-  // Normal forward flow (simplified: no Verification states)
+  // Normal forward flow
   'Created->Assigned',
   'Assigned->InDevelopment',
   'InDevelopment->QAPending',
@@ -31,8 +31,7 @@ const VALID_TRANSITIONS: ReadonlySet<string> = new Set([
   'QAPending->QAFailed',
   'QAFailed->InDevelopment',
   'QAFailed->Created',
-  'QAPassed->DocumentationUpdated',
-  'DocumentationUpdated->Completed',
+  'QAPassed->Completed',
 
   // Failure / meeting-update reverts back to Created
   'Assigned->Created',
