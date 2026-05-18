@@ -686,3 +686,28 @@
   - Removed "Feishu task created" log from `taskManager.ts`
   - Kept: startup/shutdown logs, error logs (console.error), connection status logs
 - Skipped 17.5 (fix tests) and 17.7 (create MeetingService)
+
+
+### What was done today (continued 4)
+
+- Improved meetingAnalyzer: added merge rule to system prompt
+  - Related changes from the same discussion are merged into one action item (e.g. "add rate limiting" + "change expiry" → one task)
+  - Prevents LLM from over-splitting tasks
+
+- Standardized task description format (system prompt)
+  - Create/update tasks use unified format: 需求 → 背景 → 验收标准
+  - When requirements change, acceptance criteria are automatically regenerated
+
+- Injected current date into system prompt
+  - LLM sees `CURRENT DATE: 2026-05-18 (Monday)` on every call
+  - Supports resolving relative dates: "this Wednesday" → 2026-05-20, "one week" → 2026-05-25
+
+- Feishu task completion marking
+  - After QA passes, calls Feishu `task.v2.task.patch` with `completed_at` timestamp
+  - Task shows as "completed" in Feishu
+
+- Test document versioning
+  - `generate_test_doc` attachment filename changed to `test_doc_F-000031_V1.md`, `_V2.md` incrementing
+  - Queries documents table for existing count to determine version number
+
+- Upgraded Redis from 5.0.7 to 7.4.8 (BullMQ requires 6.2.0+)

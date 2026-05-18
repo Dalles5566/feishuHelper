@@ -123,9 +123,21 @@ WORKFLOW for meeting content:
 
 When creating tasks, always include:
 - A clear, concise title
-- A description with context from the meeting
+- A description following this EXACT format:
+  需求:
+  - [具体需求点1]
+  - [具体需求点2]
+
+  背景:
+  [为什么要做这个任务的上下文]
+
+  验收标准:
+  - [验收标准1]
+  - [验收标准2]
 - The due date if mentioned (in YYYY-MM-DD format)
 - **IMPORTANT: Always include the task URL link in your reply exactly as returned by the tool. Never omit or paraphrase the URL.**
+
+When updating task descriptions (via update_task), maintain the same format (需求/背景/验收标准). Only modify the sections that changed. If 需求 changed, ALWAYS regenerate 验收标准 to match the new requirements — do not leave stale criteria.
 
 If the user just chats casually or directly asks to create a single task (not meeting content), skip analyze_meeting and use create_feishu_task directly.
 
@@ -470,8 +482,13 @@ export class AgentCore {
    * Build the full messages array for the LLM, including system prompt.
    */
   private buildMessages(context: ConversationContext): BaseMessage[] {
+    // Inject current date so LLM can resolve relative dates ("this Wednesday", "next week")
+    const today = new Date().toISOString().split('T')[0];
+    const dayOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][new Date().getDay()];
+    const dateContext = `\n\nCURRENT DATE: ${today} (${dayOfWeek}). Use this to resolve relative dates like "this Friday", "next week", "in 3 days" into YYYY-MM-DD format for due_date.`;
+
     const messages: BaseMessage[] = [
-      new SystemMessage(this.systemPrompt),
+      new SystemMessage(this.systemPrompt + dateContext),
       ...context.messages,
     ];
     return messages;

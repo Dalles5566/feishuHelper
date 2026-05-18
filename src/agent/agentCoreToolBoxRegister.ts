@@ -635,11 +635,18 @@ Generates positive, negative, and boundary test cases. Auto-advances state: InDe
           } as any);
 
           // Save test document to documents table
+          const { query: dbQuery } = await import('../utils/db.js');
+          const existingDocs = await dbQuery<any>(
+            `SELECT count(*) as cnt FROM documents WHERE related_task_id = $1 AND doc_type = 'test_doc'`,
+            [resolvedTaskId],
+          );
+          const version = (parseInt(existingDocs.rows[0]?.cnt || '0', 10)) + 1;
+
           await insert(
             `INSERT INTO documents (title, doc_type, content, related_task_id)
              VALUES ($1, $2, $3, $4) RETURNING id`,
             [
-              `Test Document: ${taskRow.title}`,
+              `Test Document: ${taskRow.title} V${version}`,
               'test_doc',
               JSON.stringify(testDoc, null, 2),
               resolvedTaskId,
@@ -664,7 +671,7 @@ Generates positive, negative, and boundary test cases. Auto-advances state: InDe
               const { Readable } = await import('stream');
               const buffer = Buffer.from(fullContent, 'utf-8');
               const stream = Readable.from(buffer);
-              (stream as any).name = `test_doc_${task_id}.md`;
+              (stream as any).name = `test_doc_${task_id}_V${version}.md`;
 
               await feishuClient.task.v2.attachment.upload({
                 data: {
@@ -749,6 +756,25 @@ Generates positive, negative, and boundary test cases. Auto-advances state: InDe
             await taskManager.updateTaskState(resolvedTaskId, 'QAPassed', 'QA passed');
             await taskManager.updateTaskState(resolvedTaskId, 'Completed', 'QA passed — task completed');
             await syncDescriptionToFeishu(resolvedTaskId, `QA 通过，任务完成`, feishuClient);
+
+            // Mark task as completed in Feishu (set completed_at timestamp)
+            const completedTaskRow = await queryOne<any>('SELECT feishu_task_id FROM tasks WHERE id = $1', [resolvedTaskId]);
+            if (completedTaskRow?.feishu_task_id) {
+              try {
+                await feishuClient.task.v2.task.patch({
+                  path: { task_guid: completedTaskRow.feishu_task_id },
+                  params: { user_id_type: 'open_id' },
+                  data: {
+                    task: { completed_at: String(Date.now()) },
+                    update_fields: ['completed_at'],
+                  },
+                });
+              } catch (feishuErr) {
+                const errMsg = feishuErr instanceof Error ? feishuErr.message : String(feishuErr);
+                console.error(`[submit_qa_feedback] Feishu task complete failed: ${errMsg}`);
+              }
+            }
+
             return `✅ QA 通过！任务已完成\n任务: ${task_id}\n状态: Completed`;
           } else {
             // Failed: go through QAFailed, always back to InDevelopment

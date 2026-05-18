@@ -682,3 +682,28 @@
   - 删除 `taskManager.ts` 中的 "Feishu task created" 日志
   - 保留：启动/关闭日志、错误日志（console.error）、连接状态日志
 - 跳过 17.5（修复测试）和 17.7（创建 MeetingService）
+
+
+### 今日完成内容（续4）
+
+- 优化 meetingAnalyzer：system prompt 加入合并规则
+  - 同一段讨论中的相关改动合并为一个 action item（如"加频率限制"+"改有效期"→ 一个任务）
+  - 避免 LLM 过度拆分任务
+
+- 规范任务描述格式（system prompt）
+  - 创建和更新任务时，描述统一为：需求 → 背景 → 验收标准
+  - 需求变更时自动重新生成验收标准
+
+- 注入当前日期到 system prompt
+  - LLM 每次调用时都能看到 `CURRENT DATE: 2026-05-18 (Monday)`
+  - 支持解析相对日期："这周三"→ 2026-05-20，"给我一个星期"→ 2026-05-25
+
+- 飞书任务完成标记
+  - QA 通过后调飞书 `task.v2.task.patch` 设置 `completed_at` 时间戳
+  - 飞书上任务显示为"已完成"
+
+- 测试文档版本号
+  - `generate_test_doc` 生成的附件文件名改为 `test_doc_F-000031_V1.md`、`_V2.md` 递增
+  - 查 documents 表已有数量确定版本号
+
+- 升级 Redis 从 5.0.7 到 7.4.8（BullMQ 要求 6.2.0+）

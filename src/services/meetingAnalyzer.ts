@@ -82,9 +82,9 @@ You MUST produce a complete, structured analysis including:
 
 Rules:
 - Extract ALL action items mentioned, even implicit ones
+- MERGE related changes discussed in the same context into a SINGLE action item (e.g. "add rate limiting" and "change timeout" discussed together as part of the same security improvement should be ONE item, not two)
 - Assign priorities based on urgency and importance discussed
 - Identify dependencies between action items
-- Write clear acceptance criteria for each action item
 - If information is not explicitly stated, infer from context or mark as unknown
 - Use the language of the meeting content for descriptions
 - Generate unique IDs for each item (AI-1, AI-2 for action items; D-1, D-2 for decisions; DP-1, DP-2 for discussion points)`;
@@ -136,9 +136,9 @@ For each action item, provide:
 
 Rules:
 - Extract both explicit and implicit action items
+- MERGE related changes from the same discussion into ONE action item (e.g. if someone says "add X" and then "also change Y" in the same topic, combine them into a single item with both changes in the description)
 - Assign priorities based on discussion tone and urgency
 - Identify dependencies between items
-- Write actionable acceptance criteria
 - Use the language of the meeting content`;
 
 // ---------------------------------------------------------------------------
