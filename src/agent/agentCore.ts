@@ -200,8 +200,7 @@ export class AgentCore {
    * which are executed and fed back until the LLM produces a final response.
    */
   async processInput(input: AgentInput): Promise<AgentOutput> {
-    console.log(`[AgentCore] processInput called — session: ${input.sessionId}, content: "${input.content.slice(0, 50)}"`);
-    const llm = await this.getLlm();
+    console.log(`[AgentCore] processInput called — session: ${input.sessionId}`);    const llm = await this.getLlm();
     const context = this.getContext(input.sessionId);
 
     // Add the user message to context
@@ -226,9 +225,7 @@ export class AgentCore {
     while (iterations < MAX_TOOL_ITERATIONS) {
       iterations++;
 
-      console.log(`[AgentCore] Calling LLM (iteration ${iterations})...`);
       const aiMessage = await this.invokeLlm(llmWithTools, currentMessages);
-      console.log(`[AgentCore] LLM responded, tool_calls: ${aiMessage.tool_calls?.length ?? 0}`);
       currentMessages.push(aiMessage);
 
       // Check if the AI wants to call tools
@@ -248,9 +245,7 @@ export class AgentCore {
 
       // Execute each tool call
       for (const toolCall of toolCalls) {
-        console.log(`[AgentCore] Tool call: ${toolCall.name}(${JSON.stringify(toolCall.args ?? {}).slice(0, 200)})`);
         const toolResult = await this.executeTool(toolCall.name, toolCall.args ?? {});
-        console.log(`[AgentCore] Tool result: ${toolResult.slice(0, 300)}`);
         actions.push({
           type: 'tool_call',
           toolName: toolCall.name,
@@ -275,8 +270,6 @@ export class AgentCore {
 
     // Trim context if it exceeds the limit
     this.trimContext(context);
-
-    console.log(`[AgentCore] Done — actions: ${actions.length}, response: "${finalResponse?.slice(0, 80) ?? 'none'}"`);
 
     return {
       actions,

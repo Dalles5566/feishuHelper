@@ -156,8 +156,6 @@ export class NotificationService {
     const messageContent = formatNotificationMessage(type, metadata, content);
 
     try {
-      console.log(`[NotificationService] Sending message to ${chatId || recipientId}`);
-
       // Send via Feishu REST API directly
       const response = await this.client.im.v1.message.create({
         params: {
@@ -169,8 +167,6 @@ export class NotificationService {
           content: JSON.stringify({ text: messageContent }),
         },
       });
-
-      console.log(`[NotificationService] API response:`, JSON.stringify(response, null, 2));
 
       const messageId = (response as any)?.data?.message_id;
 

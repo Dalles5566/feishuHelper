@@ -671,3 +671,14 @@
   - 修复：`event` 为空时跳过 history.push，不追加空记录
   - 额外防护：渲染历史时过滤掉 `reason` 为空的条目
   - 当 `event` 为空时重新从 DB 读最新 description（因为 `updateTaskDescription` 可能刚写了新值）
+
+
+### 今日完成内容（续3）
+
+- 完成 17.6：清理代码中的调试日志
+  - 删除 `agentCore.ts` 中的详细调试日志（每次 LLM 调用的参数和结果打印）
+  - 删除 `wsGateway.ts` 中的 RAW 数据打印（`JSON.stringify(data, null, 2)`）
+  - 删除 `notification.ts` 中的 API response dump
+  - 删除 `taskManager.ts` 中的 "Feishu task created" 日志
+  - 保留：启动/关闭日志、错误日志（console.error）、连接状态日志
+- 跳过 17.5（修复测试）和 17.7（创建 MeetingService）

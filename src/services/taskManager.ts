@@ -183,7 +183,6 @@ export class TaskManager {
           );
         }
 
-        console.log(`[TaskManager] Feishu task created: ${displayId} → ${taskGuid}`);
         return taskGuid;
       },
       {

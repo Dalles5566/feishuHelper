@@ -341,17 +341,17 @@ Phase 1 完成了各模块的独立实现，但联调时发现 `@larksuiteoapi/l
   - 方案待定：读时同步（操作前先从飞书 API 拉最新状态）或事件订阅
   - 解决手动在飞书上修改后本地 DB 不同步的问题
 
-- [ ] 17.5 修复测试
+- [ ] ~~17.5 修复测试~~ (已跳过 - 手动测试通过，暂不需要)
   - taskManager.test.ts 需要更新 mock（接口从 MCP 改成了 REST API）
   - 需要更新测试用例匹配新的 createTask 流程（先写 DB 再调飞书 API）
 
-- [-] 17.6 清理代码
+- [x] 17.6 清理代码
   - [x] 删除 feishuMcp.ts 和 feishuAuth.ts（已不再使用）
   - [x] 移除 @larksuiteoapi/lark-mcp 依赖
-  - [ ] 删除 AgentCore 中的调试日志（console.log）
-  - [ ] 删除 wsGateway 中的 RAW 数据打印
+  - [x] 删除 AgentCore 中的调试日志（console.log）
+  - [x] 删除 wsGateway 中的 RAW 数据打印
 
-- [ ] 17.7 创建 MeetingService
+- [ ] ~~17.7 创建 MeetingService~~ (已跳过 - 操作简单，不需要独立 Service)
   - 将 meetings 表的 CRUD 操作从 AgentCore 工具函数中抽出
   - 提供 createMeeting、getMeeting、linkTaskToMeeting 等方法
 

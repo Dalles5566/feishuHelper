@@ -62,7 +62,6 @@ export class WsGateway {
     // The SDK calls registered handlers with the decoded event data
     larkDispatcher.register({
       'im.message.receive_v1': async (data: RawLarkEvent) => {
-        console.log('[WsGateway] RAW im.message.receive_v1 data:', JSON.stringify(data, null, 2));
         await this.bridgeEvent('im.message.receive_v1', data);
       },
       'card.action.trigger': async (data: RawLarkEvent) => {
@@ -128,7 +127,7 @@ export class WsGateway {
         event: eventPayload,
       };
 
-      console.log(`[WsGateway] Received event: ${eventType}`, JSON.stringify(feishuEvent.event, null, 2));
+      console.log(`[WsGateway] Received event: ${eventType}`);
 
       await this.dispatcher.dispatch(feishuEvent as any);
     } catch (err) {

@@ -675,3 +675,14 @@
   - Fix: skip history.push when event is empty
   - Extra safeguard: filter out entries with empty `reason` when rendering history
   - When event is empty, re-read latest description from DB (since `updateTaskDescription` may have just written a new value)
+
+
+### What was done today (continued 3)
+
+- Completed 17.6: Clean up debug logging from source code
+  - Removed verbose debug logs from `agentCore.ts` (per-call LLM args and results)
+  - Removed RAW data dumps from `wsGateway.ts` (`JSON.stringify(data, null, 2)`)
+  - Removed API response dump from `notification.ts`
+  - Removed "Feishu task created" log from `taskManager.ts`
+  - Kept: startup/shutdown logs, error logs (console.error), connection status logs
+- Skipped 17.5 (fix tests) and 17.7 (create MeetingService)
