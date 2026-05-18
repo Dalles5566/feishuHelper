@@ -364,18 +364,16 @@ export function registerTools(feishuClient: any): DynamicStructuredTool[] {
 Valid events and their transitions:
 - "assigned": Created → Assigned (task has been assigned to someone)
 - "confirmed": Assigned → InDevelopment (developer confirms they will work on it)
-- "dev_complete": InDevelopment → VerificationPending (developer marks work as done)
-- "verification_passed": VerificationPending → VerificationPassed (code verification passed)
+- "dev_complete": InDevelopment → QAPending (developer marks work as done, goes directly to QA)
 - "qa_passed": QAPending → QAPassed (QA testing passed)
 - "doc_updated": QAPassed → DocumentationUpdated (documentation updated)
 - "completed": DocumentationUpdated → Completed (all done)
-- "qa_failed_impl": QAPending → InDevelopment (QA failed due to implementation error)
-- "qa_failed_req": QAPending → Created (QA failed due to requirement error)
-- "verification_failed": VerificationPending → InDevelopment (verification failed, redo)
+- "qa_failed_impl": QAPending → QAFailed → InDevelopment (QA failed due to implementation error)
+- "qa_failed_req": QAPending → QAFailed → Created (QA failed due to requirement error)
 Invalid transitions will be rejected.`,
       schema: z.object({
         task_id: z.string().describe('The task ID (UUID) or display_id (e.g. F-000001)'),
-        event: z.string().describe('The workflow event: confirmed, dev_complete, verification_passed, qa_passed, doc_updated, completed, qa_failed_impl, qa_failed_req, verification_failed'),
+        event: z.string().describe('The workflow event: assigned, confirmed, dev_complete, qa_passed, doc_updated, completed, qa_failed_impl, qa_failed_req'),
         reason: z.string().optional().describe('Reason for the state change'),
       }),
       func: async ({ task_id, event, reason }) => {
@@ -392,14 +390,12 @@ Invalid transitions will be rejected.`,
           const eventToState: Record<string, string> = {
             assigned: 'Assigned',
             confirmed: 'InDevelopment',
-            dev_complete: 'VerificationPending',
-            verification_passed: 'VerificationPassed',
+            dev_complete: 'QAPending',
             qa_passed: 'QAPassed',
             doc_updated: 'DocumentationUpdated',
             completed: 'Completed',
             qa_failed_impl: 'InDevelopment',
             qa_failed_req: 'Created',
-            verification_failed: 'InDevelopment',
           };
 
           const targetState = eventToState[event];
@@ -439,14 +435,13 @@ Invalid transitions will be rejected.`,
       },
     }),
 
-    // Tool 7: Verify code (AI code review)
+    // Tool 7: Verify code (AI code review — generates report only, no state change)
     new DynamicStructuredTool({
       name: 'verify_code',
-      description: `Verify code changes against task requirements. Call this after a developer says they finished a task.
+      description: `Verify code changes against task requirements. Generates a verification report as reference for QA.
 - If code_changes is provided (git diff), AI will analyze the code against acceptance criteria.
 - If no code_changes, AI generates a reference report based on task description and acceptance criteria.
-- Either way, the task auto-advances: InDevelopment → VerificationPending → VerificationPassed.
-- After this, call generate_test_doc to create QA test document.`,
+- This tool does NOT change task state. Use advance_task("dev_complete") to move to QAPending.`,
       schema: z.object({
         task_id: z.string().describe('The task ID (UUID) or display_id (e.g. F-000001)'),
         code_changes: z.string().optional().describe('Git diff or code snippet to verify. If not provided, generates a reference report based on requirements only.'),
@@ -462,28 +457,20 @@ Invalid transitions will be rejected.`,
             resolvedTaskId = row.id;
           }
 
-          // Get task details for verification
           const taskRow = await queryOne<any>(
-            'SELECT title, description, acceptance_criteria, state FROM tasks WHERE id = $1',
+            'SELECT title, description, acceptance_criteria FROM tasks WHERE id = $1',
             [resolvedTaskId],
           );
           if (!taskRow) return `❌ 任务不存在: ${task_id}`;
 
-          // Advance to VerificationPending first (if in InDevelopment)
-          const { TaskManager } = await import('../services/taskManager.js');
-          const taskManager = new TaskManager({ feishuClient });
-
-          if (taskRow.state === 'InDevelopment') {
-            await taskManager.updateTaskState(resolvedTaskId, 'VerificationPending', 'dev_complete');
-          }
-
-          // Run code verification
           const { CodeVerifier } = await import('../services/codeVerifier.js');
           const verifier = new CodeVerifier();
 
           const acceptanceCriteria = Array.isArray(taskRow.acceptance_criteria)
             ? taskRow.acceptance_criteria
-            : JSON.parse(taskRow.acceptance_criteria || '[]');
+            : (typeof taskRow.acceptance_criteria === 'string'
+              ? JSON.parse(taskRow.acceptance_criteria || '[]')
+              : []);
 
           const report = await verifier.verify(resolvedTaskId, {
             taskDescription: taskRow.description,
@@ -491,15 +478,8 @@ Invalid transitions will be rejected.`,
             codeChanges: code_changes || '(No code provided — reference report based on requirements)',
           });
 
-          // Always advance to VerificationPassed (per design: AI verification never blocks)
-          try {
-            await taskManager.updateTaskState(resolvedTaskId, 'VerificationPassed', 'verification_passed');
-          } catch {
-            // May already be in VerificationPassed
-          }
-
           const statusEmoji = report.status === 'passed' ? '✅' : report.status === 'failed' ? '⚠️' : '📋';
-          return `${statusEmoji} 代码验证完成\n任务: ${task_id}\n状态: ${report.status}\n匹配度: ${report.matchScore}/100\n已匹配标准: ${report.analysis.matchedCriteria.length}\n未匹配标准: ${report.analysis.unmatchedCriteria.length}\n建议: ${report.analysis.recommendations.join('; ') || '无'}`;
+          return `${statusEmoji} 代码验证报告\n任务: ${task_id}\n状态: ${report.status}\n匹配度: ${report.matchScore}/100\n已匹配标准: ${report.analysis.matchedCriteria.length}\n未匹配标准: ${report.analysis.unmatchedCriteria.length}\n建议: ${report.analysis.recommendations.join('; ') || '无'}`;
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
           return `❌ 代码验证失败: ${msg}`;
@@ -510,8 +490,8 @@ Invalid transitions will be rejected.`,
     // Tool 8: Generate test document for QA
     new DynamicStructuredTool({
       name: 'generate_test_doc',
-      description: `Generate a test document for QA based on task acceptance criteria. Call this after verify_code succeeds.
-Generates positive, negative, and boundary test cases. Auto-advances state: VerificationPassed → QAPending.`,
+      description: `Generate a test document for QA based on task acceptance criteria. Call this when a developer says they're done.
+Generates positive, negative, and boundary test cases. Auto-advances state: InDevelopment → QAPending.`,
       schema: z.object({
         task_id: z.string().describe('The task ID (UUID) or display_id (e.g. F-000001)'),
       }),
@@ -555,7 +535,7 @@ Generates positive, negative, and boundary test cases. Auto-advances state: Veri
             acceptanceCriteria: criteriaForDoc,
             dependencies: [],
             priority: 'medium',
-            state: 'VerificationPassed',
+            state: 'InDevelopment',
             sourceActionItemId: '',
             retryCount: 0,
             descriptionHistory: [],
@@ -624,6 +604,69 @@ Generates positive, negative, and boundary test cases. Auto-advances state: Veri
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
           return `❌ 生成测试文档失败: ${msg}`;
+        }
+      },
+    }),
+
+    // Tool 9: Submit QA feedback (one-stop: save feedback + advance state)
+    new DynamicStructuredTool({
+      name: 'submit_qa_feedback',
+      description: `Submit QA test results for a task. This saves the feedback to qa_feedbacks table AND automatically advances the task state. Do NOT call advance_task separately after this.
+- result "passed": advances QAPending → QAPassed
+- result "failed" with failure_type "implementation_error": advances QAPending → QAFailed → InDevelopment
+- result "failed" with failure_type "requirement_error": advances QAPending → QAFailed → Created`,
+      schema: z.object({
+        task_id: z.string().describe('The task ID (UUID) or display_id (e.g. F-000001)'),
+        result: z.enum(['passed', 'failed']).describe('QA test result'),
+        failure_type: z.enum(['implementation_error', 'requirement_error']).optional().describe('Type of failure (required if result is "failed")'),
+        details: z.string().optional().describe('Detailed feedback: what failed, why, which test cases'),
+      }),
+      func: async ({ task_id, result, failure_type, details }) => {
+        try {
+          const { queryOne, insert } = await import('../utils/db.js');
+
+          let resolvedTaskId = task_id;
+          if (/^[FB]-\d{6}$/.test(task_id)) {
+            const row = await queryOne<any>('SELECT id FROM tasks WHERE display_id = $1', [task_id]);
+            if (!row) return `❌ 任务不存在: ${task_id}`;
+            resolvedTaskId = row.id;
+          }
+
+          // Save QA feedback to database
+          await insert(
+            `INSERT INTO qa_feedbacks (task_id, result, failure_type, details, reported_by, reported_at)
+             VALUES ($1, $2, $3, $4, $5, NOW()) RETURNING id`,
+            [
+              resolvedTaskId,
+              result,
+              failure_type || null,
+              details || null,
+              'agent',
+            ],
+          );
+
+          // Advance state based on result
+          const { TaskManager } = await import('../services/taskManager.js');
+          const taskManager = new TaskManager({ feishuClient });
+
+          if (result === 'passed') {
+            await taskManager.updateTaskState(resolvedTaskId, 'QAPassed', 'QA passed');
+            return `✅ QA 通过！\n任务: ${task_id}\n状态: QAPassed`;
+          } else {
+            // Failed: go through QAFailed first
+            await taskManager.updateTaskState(resolvedTaskId, 'QAFailed', details || 'QA failed');
+
+            if (failure_type === 'requirement_error') {
+              await taskManager.updateTaskState(resolvedTaskId, 'Created', 'Requirement error — back to discussion');
+              return `❌ QA 失败（需求问题）\n任务: ${task_id}\n状态: Created（需要重新讨论需求）\n原因: ${details || '未说明'}`;
+            } else {
+              await taskManager.updateTaskState(resolvedTaskId, 'InDevelopment', 'Implementation error — back to dev');
+              return `❌ QA 失败（实现问题）\n任务: ${task_id}\n状态: InDevelopment（需要继续开发）\n原因: ${details || '未说明'}`;
+            }
+          }
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          return `❌ 提交 QA 反馈失败: ${msg}`;
         }
       },
     }),

@@ -552,3 +552,16 @@
 6. `advance_task` — 通用状态推进（状态机校验 + workflow_logs）
 7. `verify_code` — AI 代码验证（可选代码 + 自动推进）
 8. `generate_test_doc` — 生成测试文档（存 DB + 飞书附件）
+
+- 简化状态机：移除 Verification 阶段（VerificationPending、VerificationPassed、VerificationFailed）
+  - 原因：从 InDevelopment 到 QA 之间的验证步骤是 AI 内部一瞬间完成的，用户感知不到中间状态，没必要占 3 个状态
+  - 新流程：Created → Assigned → InDevelopment → QAPending → QAPassed → DocumentationUpdated → Completed
+  - `dev_complete` 事件直接从 InDevelopment 跳到 QAPending
+  - `verify_code` 工具改为只生成报告（给 QA 参考），不再推进状态
+  - `generate_test_doc` 从 InDevelopment 直接推进到 QAPending
+  - TaskState 类型移除 3 个 Verification 状态
+  - stateMachine.test.ts 有 14 个旧测试需要更新（待修复）
+- 完成 17.3.4：实现 `submit_qa_feedback` 工具
+  - 一站式工具：存 QA 反馈到 qa_feedbacks 表 + 自动推进状态
+  - 通过 → QAPassed；失败（实现错误）→ QAFailed → InDevelopment；失败（需求错误）→ QAFailed → Created
+  - system prompt 明确要求：QA 反馈先调 submit_qa_feedback，再调 update_task 更新描述

@@ -556,3 +556,16 @@
 6. `advance_task` — General state advancement (state machine validation + workflow_logs)
 7. `verify_code` — AI code verification (optional code + auto advance)
 8. `generate_test_doc` — Generate test document (save DB + Feishu attachment)
+
+- Simplified state machine: removed Verification phase (VerificationPending, VerificationPassed, VerificationFailed)
+  - Reason: verification between InDevelopment and QA is an instant AI operation, users don't perceive intermediate states, no need for 3 extra states
+  - New flow: Created → Assigned → InDevelopment → QAPending → QAPassed → DocumentationUpdated → Completed
+  - `dev_complete` event now goes directly from InDevelopment to QAPending
+  - `verify_code` tool changed to report-only (QA reference), no longer advances state
+  - `generate_test_doc` advances directly from InDevelopment to QAPending
+  - TaskState type removed 3 Verification states
+  - stateMachine.test.ts has 14 old tests that need updating (pending fix)
+- Completed 17.3.4: Implemented `submit_qa_feedback` tool
+  - One-stop tool: saves QA feedback to qa_feedbacks table + auto-advances state
+  - Passed → QAPassed; Failed (implementation) → QAFailed → InDevelopment; Failed (requirement) → QAFailed → Created
+  - System prompt explicitly requires: QA feedback calls submit_qa_feedback first, then update_task for description changes
