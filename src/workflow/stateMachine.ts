@@ -51,7 +51,6 @@ const VALID_TRANSITIONS: ReadonlySet<string> = new Set([
  * The `transition()` function handles this distinction.
  */
 const FAILURE_DESTINATION_STATES: ReadonlySet<TaskState> = new Set<TaskState>([
-  'VerificationFailed',
   'QAFailed',
 ]);
 
@@ -149,7 +148,6 @@ export async function transition(
 
     const task = taskResult.rows[0];
     const fromState = task.state as TaskState;
-    const currentUpdatedAt = task.updated_at;
 
     // 2. Validate the transition
     if (!validateTransition(fromState, toState)) {

@@ -23,9 +23,7 @@ import { getConfig } from '../config/index.js';
 import { AppError, LlmErrorCodes, ValidationErrorCodes, BusinessErrorCodes } from '../utils/errors.js';
 import { withRetry } from '../utils/retry.js';
 import { insert, queryOne } from '../utils/db.js';
-import { advanceWorkflow } from '../workflow/workflowEngine.js';
 import type { VerificationReport, CodeContext, StoredVerificationReport } from '../models/verification.js';
-import type { WorkflowEvent } from '../models/workflow.js';
 
 // ---------------------------------------------------------------------------
 // Zod schemas for structured LLM output
@@ -135,14 +133,12 @@ export interface CodeVerifierOptions {
 export class CodeVerifier {
   private llm: BaseChatModel | null = null;
   private readonly retrySleep?: (ms: number) => Promise<void>;
-  private readonly skipWorkflowAdvance: boolean;
 
   constructor(options: CodeVerifierOptions = {}) {
     if (options.llm) {
       this.llm = options.llm;
     }
     this.retrySleep = options.retrySleep;
-    this.skipWorkflowAdvance = options.skipWorkflowAdvance ?? false;
   }
 
   // ---------------------------------------------------------------------------
@@ -380,44 +376,6 @@ export class CodeVerifier {
        RETURNING id, task_id, report, code_context, created_at`,
       [taskId, JSON.stringify(report), JSON.stringify(codeContext)],
     );
-  }
-
-  /**
-   * Advance the task workflow based on the verification outcome.
-   *
-   * Regardless of the AI verification result, the task always advances to
-   * VerificationPassed so it can proceed to QA. The matchScore, aiStatus,
-   * and any discrepancies are included in the event payload so QA has
-   * full context from the AI review. Humans make the final call.
-   */
-  private async advanceTaskWorkflow(
-    taskId: string,
-    report: VerificationReport,
-  ): Promise<void> {
-    // Always pass to QA — let humans make the final call.
-    // The AI score and discrepancies are surfaced in the payload for QA reference.
-    const reason =
-      report.status === 'ambiguous'
-        ? `AI verification inconclusive (score ${report.matchScore}/100). Requirements may need clarification. Proceeding to QA for human review.`
-        : report.status === 'failed'
-          ? `AI verification flagged issues (score ${report.matchScore}/100). Proceeding to QA for human review.`
-          : `AI verification passed (score ${report.matchScore}/100).`;
-
-    const event: WorkflowEvent = {
-      type: 'verification_result',
-      payload: {
-        passed: true, // always advance to QA
-        reason,
-        matchScore: report.matchScore,
-        aiStatus: report.status, // 'passed' | 'failed' | 'ambiguous'
-        discrepancies: report.analysis.discrepancies,
-        recommendations: report.analysis.recommendations,
-      },
-      actor: 'code_verifier',
-      timestamp: new Date().toISOString(),
-    };
-
-    await advanceWorkflow(taskId, event);
   }
 
   /**

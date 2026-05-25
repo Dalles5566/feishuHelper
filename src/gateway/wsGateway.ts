@@ -88,7 +88,7 @@ export class WsGateway {
    */
   async stop(): Promise<void> {
     if (this.wsClient) {
-      await this.wsClient.disconnect();
+      await (this.wsClient as any).disconnect?.() ?? (this.wsClient as any).stop?.();
       this.wsClient = null;
       console.log('[WsGateway] WebSocket connection closed');
     }

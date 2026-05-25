@@ -31,13 +31,12 @@ function resolveTargetState(event: WorkflowEvent): TaskState | null {
     case 'assignment':
       return 'Assigned';
     case 'dev_complete':
-      return 'VerificationPending';
+      return 'QAPending';
     case 'verification_result':
-      return event.payload['passed'] === true ? 'VerificationPassed' : 'VerificationFailed';
+      // verify_code is report-only now, no state change
+      return null;
     case 'qa_result':
       return event.payload['passed'] === true ? 'QAPassed' : 'QAFailed';
-    case 'doc_updated':
-      return 'DocumentationUpdated';
     case 'meeting_update':
       // Meeting updates are handled separately via revert logic
       return 'Created';

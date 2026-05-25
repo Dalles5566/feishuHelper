@@ -707,3 +707,22 @@
   - 查 documents 表已有数量确定版本号
 
 - 升级 Redis 从 5.0.7 到 7.4.8（BullMQ 要求 6.2.0+）
+
+
+---
+
+## 2026-05-19（周二）
+
+### 今日完成内容
+
+- Docker 化部署
+  - 创建 `Dockerfile`：多阶段构建（builder 编译 TypeScript → production 只保留编译产物和生产依赖）
+  - 创建 `docker-compose.yml`：定义三个服务（app、postgres:16、redis:7），统一网络
+  - 创建 `.dockerignore`：排除 node_modules、dist、.env 等不需要进镜像的文件
+  - 成功通过 `docker compose up -d` 一键启动完整环境
+- 数据库 seed data
+  - 在 `migrations/schema.sql` 末尾添加默认员工数据（`ON CONFLICT DO NOTHING` 防重复）
+  - 新环境启动时自动插入初始数据，无需手动操作
+- 简化状态机：移除 DocumentationUpdated 状态
+  - 最终工作流：Created → Assigned → InDevelopment → QAPending → QAPassed → Completed
+  - QA 通过后自动完成（QAPassed → Completed 一步到位）

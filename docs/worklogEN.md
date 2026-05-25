@@ -711,3 +711,22 @@
   - Queries documents table for existing count to determine version number
 
 - Upgraded Redis from 5.0.7 to 7.4.8 (BullMQ requires 6.2.0+)
+
+
+---
+
+## 2026-05-19 (Tuesday)
+
+### What was done today
+
+- Dockerized deployment
+  - Created `Dockerfile`: multi-stage build (builder compiles TypeScript → production stage keeps only compiled output and production dependencies)
+  - Created `docker-compose.yml`: defines three services (app, postgres:16, redis:7) in a unified network
+  - Created `.dockerignore`: excludes node_modules, dist, .env, etc. from the image
+  - Successfully launched full environment with `docker compose up -d`
+- Database seed data
+  - Added default employee data to `migrations/schema.sql` (with `ON CONFLICT DO NOTHING` to prevent duplicates)
+  - New environments auto-insert initial data on startup — no manual steps needed
+- Simplified state machine: removed DocumentationUpdated state
+  - Final workflow: Created → Assigned → InDevelopment → QAPending → QAPassed → Completed
+  - QA pass auto-completes (QAPassed → Completed in one step)

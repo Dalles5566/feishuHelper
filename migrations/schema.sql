@@ -119,6 +119,11 @@ CREATE TABLE IF NOT EXISTS documents (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Seed data: default employees
+INSERT INTO employees (open_id, name) VALUES
+  ('ou_371598589222259055562993853b8df0', '刘秉麟')
+ON CONFLICT (open_id) DO NOTHING;
+
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_tasks_display_id ON tasks(display_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_state ON tasks(state);

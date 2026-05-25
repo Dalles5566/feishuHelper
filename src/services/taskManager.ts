@@ -163,7 +163,7 @@ export class TaskManager {
 
         const response = await this.feishuClient.task.v2.task.create({
           params: { user_id_type: 'open_id' },
-          data,
+          data: data as any,
         });
 
         if ((response as any)?.code !== 0) {
