@@ -730,3 +730,22 @@
 - Simplified state machine: removed DocumentationUpdated state
   - Final workflow: Created → Assigned → InDevelopment → QAPending → QAPassed → Completed
   - QA pass auto-completes (QAPassed → Completed in one step)
+- Deployed to DigitalOcean server
+  - Created Droplet: Ubuntu 24.04 LTS, 1 vCPU / 2GB RAM / 50GB SSD
+  - Configured SSH Key authentication (ed25519, no passphrase)
+  - Installed Docker on server, cloned repo, configured .env
+  - `docker compose up -d` launched all three containers successfully
+  - Feishu bot now running 24/7 on the server
+
+### Learning Notes
+
+- Docker core concepts:
+  - Image = pre-packaged software bundle, downloaded from Docker Hub
+  - Container = running instance of an image, isolated in a sandbox
+  - docker-compose = tool for managing multiple containers together
+  - `docker compose up -d --build` = rebuild image + start in background
+- Dockerfile is the "recipe" for packaging code into an image
+- docker-compose.yml postgres creates the database via environment variables, runs schema.sql via `/docker-entrypoint-initdb.d/`
+- SSH Key auth: private key on local machine (key), public key on server (lock), no private key = no access
+- Local Docker and server Docker have completely independent databases, even with same ports
+- Cannot run two app instances connecting to the same Feishu APP_ID simultaneously — messages will be routed randomly

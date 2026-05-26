@@ -726,3 +726,22 @@
 - 简化状态机：移除 DocumentationUpdated 状态
   - 最终工作流：Created → Assigned → InDevelopment → QAPending → QAPassed → Completed
   - QA 通过后自动完成（QAPassed → Completed 一步到位）
+- 部署到 DigitalOcean 服务器
+  - 创建 Droplet：Ubuntu 24.04 LTS，1 vCPU / 2GB RAM / 50GB SSD
+  - 配置 SSH Key 认证（ed25519，无 passphrase）
+  - 服务器安装 Docker，clone 代码，配置 .env
+  - `docker compose up -d` 一键启动，三个容器全部运行正常
+  - 飞书机器人已由服务器 7×24 接管
+
+### 今日学习笔记
+
+- Docker 核心概念：
+  - 镜像（image）= 预打包的软件安装包，从 Docker Hub 下载
+  - 容器（container）= 镜像跑起来的实例，在沙盒里运行
+  - docker-compose = 一次管理多个容器的工具
+  - `docker compose up -d --build` = 重新构建镜像 + 后台启动
+- Dockerfile 是把代码打包成镜像的"配方"
+- docker-compose.yml 里的 postgres 通过 environment 创建数据库，通过 `/docker-entrypoint-initdb.d/` 自动执行建表脚本
+- SSH Key 认证：私钥在本地（钥匙），公钥在服务器（锁），没有私钥就连不上
+- 本地 Docker 和服务器 Docker 的数据库完全独立，即使端口一样
+- 不能同时跑两个 app 实例连同一个飞书 APP_ID，消息会乱
