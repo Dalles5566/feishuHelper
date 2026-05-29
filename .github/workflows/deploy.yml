@@ -36,7 +36,7 @@ jobs:
         with:
           context: .
           push: true
-          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          tags: ghcr.io/dalles5566/feishuhelper:latest
 
       # 第四步：SSH 到服务器，pull 新 image 并重启
       - name: Deploy to server
