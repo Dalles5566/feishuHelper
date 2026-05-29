@@ -1,6 +1,6 @@
 {
   "name": "feishu-helper",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "AI Agent + Feishu MCP backend service for automating meeting minutes to development tasks",
   "type": "module",
   "main": "dist/index.js",
