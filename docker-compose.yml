@@ -1,12 +1,11 @@
 services:
   app:
-    build: .
+    image: ghcr.io/dalles5566/feishuhelper:latest
     ports:
       - "3000:3000"
     env_file:
       - .env
     environment:
-      # Override .env values to use Docker service names instead of localhost
       DB_HOST: postgres
       REDIS_HOST: redis
     depends_on:
