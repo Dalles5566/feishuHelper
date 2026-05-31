@@ -237,7 +237,7 @@ export class AgentCore {
     while (iterations < MAX_TOOL_ITERATIONS) {
       iterations++;
 
-      const aiMessage = await this.invokeLlm(llmWithTools, currentMessages);
+      const aiMessage = await this.invokeLlm(llmWithTools, currentMessages, input.sessionId);
       currentMessages.push(aiMessage);
 
       // Check if the AI wants to call tools
@@ -424,11 +424,14 @@ export class AgentCore {
   private async invokeLlm(
     llm: any,
     messages: BaseMessage[],
+    sessionId?: string,
   ): Promise<AIMessage> {
     const result = await withRetry(
       async () => {
         try {
-          const response = await (llm as any).invoke(messages);
+          const response = await (llm as any).invoke(messages, {
+            metadata: { thread_id: sessionId },
+          });
           return response as AIMessage;
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
