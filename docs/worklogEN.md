@@ -749,3 +749,38 @@
 - SSH Key auth: private key on local machine (key), public key on server (lock), no private key = no access
 - Local Docker and server Docker have completely independent databases, even with same ports
 - Cannot run two app instances connecting to the same Feishu APP_ID simultaneously — messages will be routed randomly
+
+
+---
+
+## 2026-05-28 (Wednesday)
+
+### What was done today
+
+- Implemented GitHub Actions CI/CD auto-deployment (Option 2: image registry flow)
+  - Created `.github/workflows/deploy.yml`: push to main → GitHub CI builds image → pushes to GHCR → SSH to server pulls image → restarts
+  - Modified `docker-compose.yml`: app service changed from `build: .` to `image: ghcr.io/dalles5566/feishuhelper:latest`
+  - Configured GitHub Secrets: SERVER_HOST, SERVER_SSH_KEY
+  - Fixed Docker image name casing issue (GHCR requires all lowercase)
+  - Bumped version to 1.0.0
+
+---
+
+## 2026-05-31 (Saturday)
+
+### What was done today
+
+- Integrated LangSmith LLM Tracing
+  - Added 3 environment variables to `.env` (LANGCHAIN_TRACING_V2, LANGCHAIN_API_KEY, LANGCHAIN_PROJECT)
+  - LangChain internally auto-sends all LLM calls and tool call traces to LangSmith cloud
+  - No business code changes needed
+  - Modified `agentCore.ts`: pass `metadata: { thread_id: sessionId }` in `llm.invoke()` for LangSmith thread grouping
+  - Updated `.env.example`, `README.md`, `docs/designEN.md`
+
+### Learning Notes
+
+- LangSmith is LangChain's official LLM tracing tool, free tier provides 5000 traces/month
+- Grafana itself doesn't store data, it's just a visualization panel; Loki is a general-purpose log system
+- LLM has no persistent memory — every invoke must resend full context (including system prompt)
+- Anthropic has prompt caching: same system prompt sent repeatedly costs only 10% tokens from the second time
+- Agent is also LLM, just with a tool calling loop — each round is a complete API call under the hood

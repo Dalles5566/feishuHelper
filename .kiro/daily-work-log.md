@@ -49,6 +49,13 @@
 - 修改了 `agentCore.ts` 的 `invokeLlm` 方法，传入 sessionId 作为 thread_id
 - 修改后在 LangSmith 的 "Threads" 标签可以按对话查看完整调用链
 
+**关于 token 消耗：**
+- 每次 tool-calling loop 里调 LLM，都会把完整 messages 数组（包括 system prompt）重新发一遍
+- 4 轮调用 = system prompt 发了 4 次，这不是浪费，是 LLM API 的工作方式决定的
+- LLM 没有持久记忆，每次 invoke 对它来说都是全新的对话，不带 system prompt 就不知道规则
+- Anthropic 有 prompt caching：相同 system prompt 重复发送时，第二次开始只收 10% token 费用
+- Agent 也是 LLM，只是多了 tool calling 循环，底层每一轮都是完整的 API 调用
+
 </details>
 
 ---

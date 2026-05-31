@@ -745,3 +745,38 @@
 - SSH Key 认证：私钥在本地（钥匙），公钥在服务器（锁），没有私钥就连不上
 - 本地 Docker 和服务器 Docker 的数据库完全独立，即使端口一样
 - 不能同时跑两个 app 实例连同一个飞书 APP_ID，消息会乱
+
+
+---
+
+## 2026-05-28（周三）
+
+### 今日完成内容
+
+- 实现 GitHub Actions CI/CD 自动部署（方案二：镜像仓库流程）
+  - 创建 `.github/workflows/deploy.yml`：push 到 main → GitHub CI 构建 image → 推到 GHCR → SSH 到服务器 pull image → 重启
+  - 修改 `docker-compose.yml`：app 服务从 `build: .` 改为 `image: ghcr.io/dalles5566/feishuhelper:latest`
+  - 配置 GitHub Secrets：SERVER_HOST、SERVER_SSH_KEY
+  - 修复 Docker 镜像名大小写问题（GHCR 要求全小写）
+  - 版本号升级到 1.0.0
+
+---
+
+## 2026-05-31（周六）
+
+### 今日完成内容
+
+- 接入 LangSmith LLM Tracing
+  - 在 `.env` 加 3 行环境变量（LANGCHAIN_TRACING_V2、LANGCHAIN_API_KEY、LANGCHAIN_PROJECT）
+  - LangChain 内部自动把所有 LLM 调用和 tool call 的 trace 发送到 LangSmith 云端
+  - 不需要改任何业务代码
+  - 修改 `agentCore.ts`：在 `llm.invoke()` 时传 `metadata: { thread_id: sessionId }`，让 LangSmith 按对话分组
+  - 更新 `.env.example`、`README.md`、`docs/designEN.md`
+
+### 今日学习笔记
+
+- LangSmith 是 LangChain 官方的 LLM 追踪工具，免费版每月 5000 条 trace
+- Grafana 本身不存数据，只是可视化面板；Loki 是通用日志系统
+- LLM 没有持久记忆，每次 invoke 都要重新发完整上下文（包括 system prompt）
+- Anthropic 有 prompt caching：相同 system prompt 重复发送时第二次开始只收 10% token 费用
+- Agent 也是 LLM，只是多了 tool calling 循环，底层每一轮都是完整的 API 调用
