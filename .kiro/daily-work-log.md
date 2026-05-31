@@ -43,6 +43,12 @@
 - Loki 是 Grafana 团队的日志系统，适合通用日志
 - LangSmith 是 LangChain 官方的 LLM 追踪工具，专为 AI Agent 设计
 
+**Thread 分组：**
+- 默认 LangSmith 显示扁平列表（每个 LLM 调用和 tool 调用独立一行），看不出哪些属于同一次对话
+- 需要在 `llm.invoke()` 时传 `metadata: { thread_id: sessionId }`，LangSmith 才能按对话分组
+- 修改了 `agentCore.ts` 的 `invokeLlm` 方法，传入 sessionId 作为 thread_id
+- 修改后在 LangSmith 的 "Threads" 标签可以按对话查看完整调用链
+
 </details>
 
 ---
