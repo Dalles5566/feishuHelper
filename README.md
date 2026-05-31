@@ -45,6 +45,7 @@ Feishu Helper is an AI-powered workflow automation system for Feishu (Lark). It 
 | QA Flow | Generate test docs, submit QA feedback, auto-revert or complete |
 | Feishu Sync | Say "sync please", AI compares Feishu vs local data and updates |
 | Code Verification | After code submission, AI compares against requirements (reference report) |
+| LLM Tracing | All LLM interactions automatically traced via LangSmith for debugging and error analysis |
 
 ---
 

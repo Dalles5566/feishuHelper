@@ -1,5 +1,52 @@
 # Daily Work Log
 
+## 2026-05-31 (Saturday)
+
+### ✅ 接入 LangSmith LLM Tracing
+**Summary:** 接入 LangSmith 实现 LLM 交互追踪，只需加环境变量，不需要改代码。可以在 LangSmith 网页上看到每次 LLM 调用的完整链路。
+
+<details>
+<summary>
+<strong>📖 Click to expand full details</strong>
+</summary>
+
+**做了什么：**
+- 在 `.env` 里加了 3 行环境变量（LANGCHAIN_TRACING_V2、LANGCHAIN_API_KEY、LANGCHAIN_PROJECT）
+- LangChain 内部检测到这些变量后，自动把所有 LLM 调用和 tool call 的 trace 发送到 LangSmith 云端
+- 不需要改任何代码
+
+**为什么不需要改代码：**
+- LangChain 的 `initChatModel`、`bindTools`、`invoke` 等方法内部都有 tracing hook
+- 当 `LANGCHAIN_TRACING_V2=true` 时自动激活，否则什么都不做
+- `DynamicStructuredTool.invoke()` 也会被自动 trace（记录 tool 输入参数和返回结果）
+
+**能看到什么：**
+- ✅ 用户发了什么消息
+- ✅ LLM 决定调哪些 tool（tool_calls 列表）
+- ✅ 每个 tool 的输入参数和返回结果
+- ✅ LLM 的最终回复
+- ✅ token 用量、延迟、成本
+- ❌ tool 内部的中间步骤（比如先调了飞书 API 再写了数据库）
+
+**方案对比（为什么选 LangSmith）：**
+
+| 方案 | 存储 | 可视化 | 复杂度 |
+|------|------|--------|--------|
+| PostgreSQL 自建 | 存 PG | 需要自己写查询 | 中 |
+| Loki + Grafana | 存 Loki | 通用日志面板 | 中（要装 Loki） |
+| LangSmith | 云端 | 专为 LLM 设计的树状调用链 | 低（加环境变量） |
+
+**LangSmith 免费版：** 每月 5000 条 trace，对个人项目绰绰有余。
+
+**关键概念：**
+- Grafana 本身不存数据，只是可视化面板
+- Loki 是 Grafana 团队的日志系统，适合通用日志
+- LangSmith 是 LangChain 官方的 LLM 追踪工具，专为 AI Agent 设计
+
+</details>
+
+---
+
 ## 2026-05-28 (Wednesday)
 
 ### 🔍 CI/CD 自动部署方案对比
@@ -78,6 +125,36 @@
 
 #### 当前决策
 先用方案二（标准版：GitHub Actions 构建 image → 推到 GHCR → 服务器 pull image）。
+
+#### 实际实施记录
+
+**创建的文件：**
+- `.github/workflows/deploy.yml` — GitHub Actions 自动部署配置
+
+**修改的文件：**
+- `docker-compose.yml` — app 服务从 `build: .` 改为 `image: ghcr.io/dalles5566/feishuhelper:latest`
+- `package.json` — 版本号改为 1.0.0
+
+**GitHub Secrets 配置：**
+- `SERVER_HOST` = 服务器 IP
+- `SERVER_SSH_KEY` = SSH 私钥（让 GitHub Actions 能 SSH 到服务器）
+
+**遇到的问题：**
+- Docker 镜像名必须全小写，但 `${{ github.repository }}` 返回 `Dalles5566/feishuHelper`（有大写）
+- 修复：把 tags 直接写死为 `ghcr.io/dalles5566/feishuhelper:latest`
+
+**部署后验证方式：**
+- 在服务器上 `docker exec feishuhelper-app-1 cat /app/package.json | grep version` 查看容器内版本号
+- 或 `docker inspect ghcr.io/dalles5566/feishuhelper:latest --format='{{.Created}}'` 查看 image 构建时间
+
+**注意事项：**
+- 服务器上需要保留 `docker-compose.yml` 和 `.env`，其他代码文件不影响运行
+- 第一次部署需要手动 `git pull` 更新 docker-compose.yml，之后全自动
+- `docker exec -it feishuhelper-app-1 sh` 可以进入容器内部查看文件
+
+</details>
+
+---
 
 #### Dockerfile 多阶段构建的意义
 

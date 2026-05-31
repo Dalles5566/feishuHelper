@@ -98,6 +98,7 @@ stateDiagram-v2
 | Database | PostgreSQL | Supports JSONB for flexible task metadata storage |
 | Message Queue | BullMQ (Redis) | Handles async workflow tasks, supports retry and delay |
 | Web Framework | Fastify | High performance, suitable for Webhook handling |
+| LLM Tracing | LangSmith | LangChain's official tracing platform, auto-captures all LLM calls and tool usage |
 
 ## Components and Interfaces
 
